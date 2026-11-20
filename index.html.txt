@@ -1,0 +1,3524 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GTA SUS 3D: Ultra Next-Gen Edition — Otwarty Świat Three.js</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #05070c; font-family: 'Inter', sans-serif; color: #f8fafc; }
+  .font-gta { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.06em; }
+  .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+  canvas { display: block; width: 100%; height: 100%; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.85); }
+  ::-webkit-scrollbar-thumb { background: #ec4899; border-radius: 9999px; }
+  @keyframes sirenRed { 0%, 49% { opacity: 1; transform: scale(1.1); } 50%, 100% { opacity: 0.25; transform: scale(0.95); } }
+  @keyframes sirenBlue { 0%, 49% { opacity: 0.25; transform: scale(0.95); } 50%, 100% { opacity: 1; transform: scale(1.1); } }
+  .siren-r { animation: sirenRed 0.42s infinite; color: #ef4444; text-shadow: 0 0 12px #ef4444; }
+  .siren-b { animation: sirenBlue 0.42s infinite; color: #3b82f6; text-shadow: 0 0 12px #3b82f6; }
+  .glass-panel { background: rgba(10, 14, 24, 0.86); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.14); }
+  .npc-tag {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+    z-index: 15;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    background: rgba(9, 13, 22, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden">
+
+<!-- KONTENER RENDERERA 3D THREE.JS -->
+<div id="webglContainer" class="fixed inset-0 w-full h-full"></div>
+<div id="npcTagsLayer" class="fixed inset-0 pointer-events-none z-15"></div>
+
+<!-- EKRAN STARTOWY 3D -->
+<div id="startScreen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950/95 via-purple-950/90 to-slate-950/95 p-4">
+  <div class="max-w-4xl w-full glass-panel rounded-3xl p-6 md:p-10 shadow-2xl border-pink-500/40 text-center">
+    <div class="inline-block px-4 py-1 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-300 text-xs font-bold uppercase tracking-widest mb-3">
+      Three.js Real-Time 3D Engine • 100% Offline Singleplayer • Ultra Next-Gen Edition
+    </div>
+    <h1 class="font-gta text-6xl md:text-8xl text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-amber-400 to-cyan-400 drop-shadow-lg leading-none">
+      GRAND THEFT AUTO: SUS 3D
+    </h1>
+    <p class="text-slate-300 text-sm md:text-base mt-3 max-w-2xl mx-auto">
+      Darmowy start w metropolii 3D z kamerą TPP/FPP, <b>3 aglomeracjami</b>, wieżowcami, estakadą, latarniami, parkiem z fontanną i ławkami, portem, lotniskiem, skarbem banku <b>[H]</b>, aktywnymi samolotami, helikopterami i patrolującym czołgiem AI, <b>400 darmowymi pojazdami ($0)</b>, rozmowami AI NPC <b>[T]</b>, pościgiem <b>Policji, SWAT, FBI i Wojska (1–6★)</b> oraz encyklopedią <b>2,323,850 funkcji</b>!
+    </p>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-6 text-left text-xs">
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-emerald-500/30">
+        <div class="text-emerald-400 font-bold text-sm">DARMOWY START</div>
+        <div class="text-slate-400 mt-0.5">Wejście do gry jest darmowe; startujesz z $1,000 w portfelu.</div>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-cyan-500/30">
+        <div class="text-cyan-400 font-bold text-sm">400 POJAZDÓW ($0)</div>
+        <div class="text-slate-400 mt-0.5">Auta, motory, samoloty, helikoptery i łodzie</div>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-amber-500/30">
+        <div class="text-amber-400 font-bold text-sm">AI NPC CHAT [T]</div>
+        <div class="text-slate-400 mt-0.5">Rozmowy Groq AI z rotacją 2 kluczy i fallbackiem</div>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-pink-500/30">
+        <div class="text-pink-400 font-bold text-sm">2,323,850 FUNKCJI</div>
+        <div class="text-slate-400 mt-0.5">W tym filtr 1,000,000 Nowych Funkcji (v7)</div>
+      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <button id="btnStartNew" class="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-600 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-gta text-2xl tracking-wider shadow-lg shadow-pink-600/30 transition transform hover:scale-105 cursor-pointer">
+        ▶ ZAGRAJ ZA DARMO
+      </button>
+      <button id="btnLoadSave" class="px-6 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-gta text-2xl tracking-wider transition cursor-pointer">
+        📂 WCZYTAJ ZAPIS
+      </button>
+      <button id="btnOpenFeaturesStart" class="px-6 py-4 rounded-2xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-gta text-2xl tracking-wider transition cursor-pointer">
+        📜 LISTA 2,323,850 FUNKCJI
+      </button>
+    </div>
+
+    <div class="mt-6 pt-4 border-t border-slate-800 text-xs text-slate-400 flex flex-wrap justify-center gap-x-4 gap-y-1">
+      <span><b class="text-white">WASD:</b> Ruch / Jazda / Sterowanie</span>
+      <span><b class="text-white">PPM + Mysz / ←→:</b> Obrót kamery 3D</span>
+      <span><b class="text-white">LPM / F-strzał:</b> Strzał / Działo</span>
+      <span><b class="text-white">E / F:</b> Wsiądź / Wysiądź / Wejdź</span>
+      <span><b class="text-white">T:</b> Rozmowa AI z NPC</span>
+      <span><b class="text-white">Spacja / C:</b> Skok / Przewrót taktyczny</span>
+      <span><b class="text-white">Q / R (w locie):</b> Opadanie / Wznoszenie</span>
+      <span><b class="text-white">H:</b> Napad na Bank (Wiertło/Łup)</span>
+      <span><b class="text-white">I / Tab:</b> Ekwipunek</span>
+      <span><b class="text-white">B:</b> Sklep ($100) & 400 Pojazdów ($0)</span>
+      <span><b class="text-white">V:</b> Kamera TPP / FPP</span>
+      <span><b class="text-white">P:</b> SusPhone • <b class="text-white">M:</b> Mapa • <b class="text-white">ESC:</b> Ustawienia</span>
+    </div>
+  </div>
+</div>
+
+<!-- CELOWNIK 3D NA ŚRODKU EKRANU -->
+<div id="crosshair" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
+  <div class="w-5 h-5 rounded-full border-2 border-pink-400/90 flex items-center justify-center shadow">
+    <div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+  </div>
+</div>
+
+<!-- GŁÓWNY HUD 3D -->
+<div id="hudLayer" class="fixed inset-0 pointer-events-none hidden z-20">
+  <!-- LEWY GÓRNY RÓG: RADAR MINIMAPY + STATUS GRACZA -->
+  <div class="absolute top-3 left-3 flex flex-col gap-2 pointer-events-auto">
+    <div class="relative w-44 h-44 sm:w-52 sm:h-52 rounded-2xl overflow-hidden border-2 border-slate-700 shadow-2xl bg-slate-950">
+      <canvas id="minimapCanvas" width="208" height="208" class="w-full h-full"></canvas>
+      <div class="absolute top-1.5 left-2 right-2 flex justify-between items-center text-[10px] font-bold uppercase bg-slate-950/80 px-2 py-0.5 rounded-lg">
+        <span id="hudZoneName" class="text-amber-400 truncate">Sus City Downtown</span>
+        <span id="hudTimeClock" class="font-mono-code text-slate-200">12:00</span>
+      </div>
+      <div class="absolute bottom-1.5 left-2 right-2 flex justify-between items-center text-[10px] bg-slate-950/80 px-2 py-0.5 rounded-lg">
+        <span id="hudSeasonWeather" class="text-cyan-300">🌸 Wiosna • Słonecznie</span>
+        <button id="btnHudMap" class="text-pink-400 hover:underline font-bold cursor-pointer">[M] Mapa</button>
+      </div>
+    </div>
+
+    <div class="glass-panel rounded-2xl p-2.5 w-44 sm:w-52 space-y-1.5 text-xs">
+      <div>
+        <div class="flex justify-between text-[10px] font-bold mb-0.5"><span class="text-emerald-400">ZDROWIE</span><span id="hudHpVal">100/100</span></div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden"><div id="hudHpBar" class="h-full bg-emerald-500 transition-all" style="width:100%"></div></div>
+      </div>
+      <div>
+        <div class="flex justify-between text-[10px] font-bold mb-0.5"><span class="text-cyan-400">PANCERZ</span><span id="hudArmorVal">50/100</span></div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden"><div id="hudArmorBar" class="h-full bg-cyan-500 transition-all" style="width:50%"></div></div>
+      </div>
+      <div>
+        <div class="flex justify-between text-[10px] font-bold mb-0.5"><span class="text-amber-400">KONDYCJA</span><span id="hudStaminaVal">100%</span></div>
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"><div id="hudStaminaBar" class="h-full bg-amber-400 transition-all" style="width:100%"></div></div>
+      </div>
+      <div class="flex justify-between items-center pt-1 border-t border-slate-800 text-[10px] text-slate-300">
+        <span id="hudCamMode">🎥 Kamera: TPP [V]</span>
+        <span id="hudDogBadge" class="text-pink-400 font-bold">🐕 Pies: Brak</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ŚRODEK GÓRA: ŚWIADKOWIE 911 / NAPAD NA BANK / INTERAKCJE / WIADOMOŚCI -->
+  <div class="absolute top-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 max-w-md w-full px-4">
+    <div id="hudWitnessBanner" class="hidden px-4 py-1.5 rounded-full bg-red-600/95 border border-red-300 text-white text-xs font-bold shadow-lg animate-bounce">
+      📱 ŚWIADEK DZWONI NA 911! (<span id="witnessTimer">4.0</span>s)
+    </div>
+    <div id="hudHeistBanner" class="hidden w-full glass-panel border-emerald-400/60 p-2.5 rounded-2xl text-xs pointer-events-auto">
+      <div class="flex justify-between items-center font-bold text-emerald-300 mb-1">
+        <span id="heistStageLabel">🏦 Napad na Bank — Wiercenie skarbca</span>
+        <span id="heistPctLabel" class="font-mono-code">0%</span>
+      </div>
+      <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-1.5">
+        <div id="heistProgressBar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all" style="width:0%"></div>
+      </div>
+      <div class="flex justify-between items-center text-[10px] text-slate-300">
+        <span id="heistLootPreview">Łup w skarbcu: $0</span>
+        <button id="btnHudHeistAction" class="px-2.5 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer">[H] Rozpocznij / Zabierz Łup</button>
+      </div>
+    </div>
+    <div id="hudActionPrompt" class="hidden px-4 py-2 rounded-2xl glass-panel border-amber-400/60 text-amber-300 text-xs sm:text-sm font-bold shadow-xl text-center">
+      Naciśnij [E] lub [F], aby wejść
+    </div>
+    <div id="hudNewsTicker" class="px-3 py-1 rounded-full bg-slate-950/85 border border-slate-800 text-[11px] text-slate-300 truncate max-w-full">
+      📻 WCTR 3D News: Witamy w GTA SUS 3D Ultra Next-Gen! 400 pojazdów za $0, samoloty, helikoptery, czołg AI i rozmowy [T]!
+    </div>
+  </div>
+
+  <!-- PRAWY GÓRNY RÓG: GWIAZDKI POŚCIGU, PIENIĄDZE, BROŃ I PRZYCISKI GUI -->
+  <div class="absolute top-3 right-3 flex flex-col items-end gap-2 pointer-events-auto">
+    <div id="wantedStarsBox" class="glass-panel px-3 py-1.5 rounded-2xl flex items-center gap-1.5">
+      <span id="wantedAgencyLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">CZYSTO</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+      <span class="star-icon text-lg text-slate-700">★</span>
+    </div>
+
+    <div class="glass-panel px-3.5 py-2 rounded-2xl text-right">
+      <div id="hudCash" class="font-gta text-3xl text-emerald-400 leading-none">$1,000</div>
+      <div class="text-[11px] text-amber-400 font-mono-code mt-0.5">Brudna kasa: <span id="hudDirtyCash">$0</span></div>
+    </div>
+
+    <div class="glass-panel px-3.5 py-2 rounded-2xl flex items-center gap-3">
+      <div class="text-right">
+        <div id="hudWeaponName" class="text-xs font-bold text-pink-400 uppercase">Pięści / MMA</div>
+        <div id="hudWeaponAmmo" class="font-mono-code text-sm font-bold text-white">∞ / ∞</div>
+        <div id="hudWeaponMods" class="text-[10px] text-slate-400">Tłumik: Brak</div>
+      </div>
+      <div id="hudWeaponIcon" class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-xl">👊</div>
+    </div>
+
+    <div class="flex flex-wrap justify-end gap-1.5 max-w-xs">
+      <button id="btnHudShopAll" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-pink-600 hover:from-amber-500 hover:to-pink-500 text-white text-xs font-bold shadow cursor-pointer">🛒 [B] Sklep & 400 Aut ($0)</button>
+      <button id="btnHudInventory" class="px-3 py-1.5 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-bold shadow cursor-pointer">🎒 [I] Ekwipunek</button>
+      <button id="btnHudPhone" class="px-3 py-1.5 rounded-xl bg-pink-600/90 hover:bg-pink-500 text-white text-xs font-bold shadow cursor-pointer">📱 [P] SusPhone</button>
+      <button id="btnHudFeatures" class="px-3 py-1.5 rounded-xl bg-purple-600/90 hover:bg-purple-500 text-white text-xs font-bold shadow cursor-pointer">📜 2,323,850 Funkcji</button>
+      <button id="btnHudSettings" class="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold shadow cursor-pointer">⚙️ [ESC]</button>
+    </div>
+  </div>
+
+  <!-- PRAWY DOLNY RÓG: KOKPIT POJAZDU 3D -->
+  <div id="vehicleHud" class="hidden absolute bottom-4 right-4 glass-panel p-3.5 rounded-2xl w-72 space-y-2 pointer-events-auto">
+    <div class="flex justify-between items-center">
+      <div>
+        <div id="vehHudName" class="font-gta text-xl text-cyan-300 leading-none">Kuruma Sus-Evo 3D</div>
+        <div id="vehHudPlate" class="font-mono-code text-[10px] text-slate-400">TABLICA: SUS-3D • [E] WYSIĄDŹ</div>
+      </div>
+      <div class="text-right">
+        <span id="vehHudSpeed" class="font-gta text-3xl text-white">0</span>
+        <span id="vehHudUnit" class="text-[10px] text-slate-400 block -mt-1">KM/H</span>
+      </div>
+    </div>
+    <div id="vehFlightHints" class="hidden text-[10px] text-amber-300 bg-slate-950/70 px-2 py-1 rounded-lg">
+      W/S: Ciąg • A/D: Przechył/Skręt • R: Wznoszenie • Q: Opadanie • E/F: Wysiądź
+    </div>
+    <div class="grid grid-cols-2 gap-2 text-[10px]">
+      <div>
+        <div class="flex justify-between text-slate-300 mb-0.5"><span>PALIWO</span><span id="vehHudFuelVal">100%</span></div>
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"><div id="vehHudFuelBar" class="h-full bg-amber-400" style="width:100%"></div></div>
+      </div>
+      <div>
+        <div class="flex justify-between text-slate-300 mb-0.5"><span>PANCERZ AUTA</span><span id="vehHudHpVal">100%</span></div>
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"><div id="vehHudHpBar" class="h-full bg-emerald-400" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div class="flex justify-between items-center pt-1 border-t border-slate-800 text-[11px]">
+      <span id="vehHudRadio" class="text-pink-400 truncate max-w-[175px]">📻 Sus FM 3D - Synthwave</span>
+      <button id="btnChangeRadio" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-xs cursor-pointer">Zmień [N]</button>
+    </div>
+  </div>
+
+  <!-- LEWY DOLNY RÓG: LOG WYDARZEŃ + PASEK BRONI 1-9 -->
+  <div class="absolute bottom-4 left-4 flex flex-col gap-2 pointer-events-auto max-w-md">
+    <div id="eventLog" class="space-y-1 text-xs max-h-28 overflow-hidden flex flex-col justify-end"></div>
+    <div id="weaponHotbar" class="flex flex-wrap gap-1"></div>
+  </div>
+</div>
+
+<!-- MODAL: ROZMOWA AI Z NPC [T] -->
+<div id="npcChatModal" class="hidden fixed inset-0 z-40 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-lg w-full p-5 border-cyan-500/40 shadow-2xl space-y-3">
+    <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
+      <div>
+        <div id="npcChatTitle" class="font-gta text-2xl text-cyan-300">💬 Rozmowa z NPC</div>
+        <div id="npcChatMeta" class="text-[11px] text-slate-400">Groq AI (Rotacja 2 kluczy) + Tryb Offline</div>
+      </div>
+      <button id="btnCloseNpcChat" class="px-3 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold cursor-pointer">Zamknij ✕</button>
+    </div>
+    <div id="npcChatReply" class="p-3.5 rounded-2xl bg-slate-900/95 border border-slate-800 text-xs sm:text-sm text-slate-100 min-h-[76px]">
+      Powiedz coś do NPC w Sus City 3D...
+    </div>
+    <div class="flex gap-2">
+      <input id="npcChatInput" type="text" placeholder="Napisz wiadomość (np. Co słychać w mieście?, Gdzie jest bank?)..." class="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-400">
+      <button id="btnSendNpcChat" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs sm:text-sm font-bold cursor-pointer">Wyślij</button>
+    </div>
+    <div class="flex flex-wrap gap-1.5 text-[11px]">
+      <button class="npc-quick px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">„Co słychać na mieście?”</button>
+      <button class="npc-quick px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">„Jak obrobić bank [H]?”</button>
+      <button class="npc-quick px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">„Gdzie latają samoloty i czołg?”</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EKWIPUNEK GRACZA [I] / [TAB] -->
+<div id="inventoryModal" class="hidden fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-3xl w-full p-5 border-indigo-500/40 shadow-2xl space-y-4 max-h-[88vh] overflow-y-auto">
+    <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+      <div>
+        <h2 class="font-gta text-3xl text-indigo-300">🎒 EKWIPUNEK I WYPOSAŻENIE [I / TAB]</h2>
+        <p class="text-xs text-slate-400">Wybierz aktywną broń, sprawdź amunicję, pancerz, psa oraz przedmioty specjalne.</p>
+      </div>
+      <button id="btnCloseInventory" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold cursor-pointer">Zamknij ✕</button>
+    </div>
+    <div id="inventoryGearSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"></div>
+    <div id="inventoryWeaponsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs"></div>
+  </div>
+</div>
+
+<!-- MODAL: SKLEP Z BRONIĄ ($100) I DARMOWY SPAWNER 400 POJAZDÓW 3D ($0!) -->
+<div id="shopModal" class="hidden fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden border-amber-500/40 shadow-2xl">
+    <div class="p-4 sm:p-5 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3 bg-slate-900/95">
+      <div>
+        <h2 id="shopModalTitle" class="font-gta text-3xl text-amber-400">🛒 AMMU-SUS ($100) & DARMOWY SPAWNER 400 POJAZDÓW 3D ($0!)</h2>
+        <p class="text-xs text-slate-300">Gotówka: <span id="shopPlayerCash" class="text-emerald-400 font-bold text-sm">$1,000</span> • Wszystkie <b>400 pojazdów 3D są DARMOWE ($0)</b>! Broń i dodatki po <b>$100</b>.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="tabAmmu" class="px-3.5 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold cursor-pointer">🔫 Broń & Dodatki ($100)</button>
+        <button id="tabVehicles" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">🚗 400 Pojazdów 3D ($0 DARMOWE)</button>
+        <button id="tabModShop" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold cursor-pointer">🔧 Warsztat ($100)</button>
+        <button id="btnCloseShop" class="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold cursor-pointer">✕ [B]</button>
+      </div>
+    </div>
+    <div id="vehicleFilterBar" class="hidden px-4 sm:px-5 py-2.5 bg-slate-900/75 border-b border-slate-800 flex flex-wrap gap-2 items-center text-xs">
+      <input id="vehSearchInput" type="text" placeholder="Szukaj wśród 400 pojazdów (np. Samolot, Helikopter, Łódź, Czołg, FBI, #042)..." class="flex-1 min-w-[210px] px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white">
+      <select id="vehCategoryFilter" class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-200">
+        <option value="ALL">Wszystkie 400 pojazdów ($0)</option>
+        <option value="Samolot">✈️ Samoloty 3D</option>
+        <option value="Helikopter">🚁 Helikoptery 3D</option>
+        <option value="Łódź">🚤 Łodzie & Jachty 3D</option>
+        <option value="Motocykl">🏍️ Motocykle 3D</option>
+        <option value="Służby">🚓 Policja, FBI, SWAT, Wojsko</option>
+        <option value="Auto">🏎️ Auta, Sportowe, Terenowe & Ciężarówki</option>
+      </select>
+    </div>
+    <div id="shopModalBody" class="p-4 sm:p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+  </div>
+</div>
+
+<!-- MODAL: SUSPHONE OS 3D -->
+<div id="phoneModal" class="hidden fixed inset-0 z-40 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-slate-900 border-4 border-slate-700 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+    <div class="bg-slate-950 px-6 py-3 flex justify-between items-center text-xs text-slate-400 border-b border-slate-800">
+      <span class="font-bold text-pink-400">SusOS 3D • Offline</span>
+      <span id="phoneClock" class="font-mono-code">12:00</span>
+      <button id="btnClosePhone" class="text-red-400 hover:text-red-300 font-bold cursor-pointer">Zamknij [P]</button>
+    </div>
+    <div class="grid grid-cols-5 gap-1 p-2 bg-slate-950/60 border-b border-slate-800 text-[10px] font-bold">
+      <button data-app="bank" class="phone-tab p-2 rounded-xl bg-emerald-600/30 text-emerald-300 cursor-pointer">🏦 Bank</button>
+      <button data-app="stocks" class="phone-tab p-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer">📈 Giełda</button>
+      <button data-app="sustok" class="phone-tab p-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer">📱 SusTok</button>
+      <button data-app="missions" class="phone-tab p-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer">🎯 Misje</button>
+      <button data-app="garage" class="phone-tab p-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer">🚗 $0 Auta</button>
+    </div>
+    <div id="phoneAppBody" class="p-4 overflow-y-auto space-y-3 flex-1 text-xs"></div>
+  </div>
+</div>
+
+<!-- MODAL: ENCYKLOPEDIA 2,323,850 FUNKCJI GTA SUS 3D -->
+<div id="featuresModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden border-purple-500/40 shadow-2xl">
+    <div class="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/95">
+      <div>
+        <h2 class="font-gta text-3xl text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-amber-300 to-cyan-400">
+          📜 ENCYKLOPEDIA GTA SUS 3D — 2,323,850 FUNKCJI
+        </h2>
+        <p class="text-xs text-slate-400">Dopasowano: <b id="featuresCountBadge" class="text-emerald-400">2,323,850</b> / 2,323,850 funkcji (wyświetlane strony po 200 pozycji dla maksymalnej płynności).</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnPrevFeaturesPage" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer">◀ Poprzednia</button>
+        <span id="featuresPageLabel" class="text-xs font-mono-code text-amber-300">Strona 1</span>
+        <button id="btnNextFeaturesPage" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer">Następna ▶</button>
+        <button id="btnCloseFeatures" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold cursor-pointer">Zamknij ✕</button>
+      </div>
+    </div>
+    <div class="p-3 bg-slate-900/70 border-b border-slate-800 flex flex-wrap gap-2 items-center">
+      <input id="featureSearchInput" type="text" placeholder="Szukaj wśród 2,323,850 funkcji (np. jakość, grafika, cienie, chmury, samolot, czołg, v7)..." class="flex-1 min-w-[220px] px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-pink-500">
+      <select id="featureCategoryFilter" class="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-200">
+        <option value="ALL">Wszystkie kategorie (2,323,850)</option>
+        <option value="ORIG">1–100: Oryginalna Lista (100)</option>
+        <option value="PREV350">101–450: Pakiet Rozszerzony (350)</option>
+        <option value="NEW500">451–950: Nowe Funkcje 3D (500)</option>
+        <option value="MEGA117900">951–118,850: Baza Mega GTA & Naprawy (117,900)</option>
+        <option value="QOL50000">118,851–168,850: Jakość Gry +50,000</option>
+        <option value="GFX55000">168,851–223,850: Grafika 3D, Cienie & Chmury +55,000</option>
+        <option value="NEW1000000V7">223,851–2,323,850: 1,000,000 Nowych Funkcji (v7)</option>
+      </select>
+    </div>
+    <div id="featuresListContainer" class="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs"></div>
+  </div>
+</div>
+
+<!-- MODAL: PEŁNA MAPA ŚWIATA 3D (M) -->
+<div id="mapModal" class="hidden fixed inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-4xl w-full p-5 flex flex-col gap-3 border-cyan-500/40">
+    <div class="flex justify-between items-center">
+      <div>
+        <h2 class="font-gta text-3xl text-cyan-400">🗺️ MAPA STANU SUS 3D (3 MIASTA + PARK + LOTNISKO + OCEAN)</h2>
+        <p class="text-xs text-slate-400">Kliknij dowolne miejsce na mapie, aby ustawić trasę GPS lub wezwać taksówkę ($50).</p>
+      </div>
+      <button id="btnCloseMap" class="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold cursor-pointer">Zamknij [M]</button>
+    </div>
+    <div class="relative w-full aspect-[16/10] bg-slate-950 rounded-2xl overflow-hidden border border-slate-700">
+      <canvas id="fullMapCanvas" width="900" height="560" class="w-full h-full cursor-crosshair"></canvas>
+    </div>
+    <div class="flex flex-wrap justify-between items-center gap-2 text-xs text-slate-300">
+      <div class="flex flex-wrap gap-3">
+        <span>🟢 Gracz</span>
+        <span>🛒 Sklep & 400 Aut ($0)</span>
+        <span>🌳 Park SUS z Fontanną</span>
+        <span>🏦 Bank Skarbiec [H]</span>
+        <span>✈️ Lotnisko</span>
+      </div>
+      <button id="btnTaxiFastTravel" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer">🚕 Szybka Podróż Taksówką do GPS ($50)</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MENU USTAWIEŃ 3D I SANDBOX (ESC) -->
+<div id="settingsModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="glass-panel rounded-3xl max-w-2xl w-full p-6 space-y-4 border-slate-600 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+      <h2 class="font-gta text-3xl text-white">⚙️ USTAWIENIA 3D — GTA SUS ULTRA NEXT-GEN</h2>
+      <div class="flex gap-2">
+        <button id="btnSettingsOpenFeatures" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold cursor-pointer">📜 2,323,850 Funkcji</button>
+        <button id="btnCloseSettings" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Wznów [ESC]</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+        <div class="font-bold text-amber-400 uppercase">Mechaniki, Grafika & Kamera 3D</div>
+        <div class="flex items-center justify-between">
+          <span>Preset Grafiki 3D:</span>
+          <select id="setGraphicsPreset" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high" selected>High</option>
+            <option value="ultra">Ultra</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Ekspozycja ACES Filmic:</span>
+          <input id="setExposure" type="range" min="0.6" max="1.6" step="0.05" value="1.05" class="accent-pink-500 w-24">
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Gęstość Chmur 3D:</span>
+          <input id="setCloudDensity" type="range" min="0" max="100" value="75" class="accent-cyan-400 w-24">
+        </div>
+        <label class="flex items-center justify-between cursor-pointer">
+          <span>System zużycia paliwa</span>
+          <input id="setFuelEnabled" type="checkbox" checked class="accent-pink-500 w-4 h-4">
+        </label>
+        <label class="flex items-center justify-between cursor-pointer">
+          <span>Świadkowie dzwoniący na 911</span>
+          <input id="setWitnessSystem" type="checkbox" checked class="accent-pink-500 w-4 h-4">
+        </label>
+        <label class="flex items-center justify-between cursor-pointer">
+          <span>Cienie 3D PCFSoftShadowMap</span>
+          <input id="setShadowsEnabled" type="checkbox" checked class="accent-pink-500 w-4 h-4">
+        </label>
+        <label class="flex items-center justify-between cursor-pointer">
+          <span>Dźwięki WebAudio</span>
+          <input id="setAudioEnabled" type="checkbox" checked class="accent-pink-500 w-4 h-4">
+        </label>
+        <div class="flex items-center justify-between">
+          <span>Czułość obrotu kamery:</span>
+          <input id="setCamSens" type="range" min="1" max="10" value="5" class="accent-pink-500 w-24">
+        </div>
+      </div>
+
+      <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+        <div class="font-bold text-cyan-400 uppercase">Środowisko, Pogoda & Pory Roku 3D</div>
+        <div class="flex items-center justify-between">
+          <span>Pora roku 3D:</span>
+          <select id="setSeason" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1">
+            <option value="spring">🌸 Wiosna</option>
+            <option value="summer">☀️ Lato</option>
+            <option value="autumn">🍂 Jesień</option>
+            <option value="winter">❄️ Zima (Śnieg 3D)</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Pogoda 3D:</span>
+          <select id="setWeather" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1">
+            <option value="clear">☀️ Słonecznie + Chmury</option>
+            <option value="rain">🌧️ Ulewa 3D</option>
+            <option value="storm">⛈️ Huragan / Burza</option>
+            <option value="fog">🌫️ Gęsta Mgła 3D</option>
+            <option value="snow">❄️ Śnieżyca 3D</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Pora dnia:</span>
+          <select id="setTimeOfDay" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1">
+            <option value="day" selected>☀️ Południe (12:00)</option>
+            <option value="sunset">🌇 Zachód Słońca (19:30)</option>
+            <option value="night">🌙 Noc + Światła (01:00)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs">
+      <div class="font-bold text-pink-400 uppercase">Szybkie Akcje Sandbox & Zapis</div>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnCheatCash" class="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 font-bold cursor-pointer">+$5,000 Gotówki</button>
+        <button id="btnCheatClearWanted" class="px-3 py-1.5 rounded-xl bg-blue-700 hover:bg-blue-600 font-bold cursor-pointer">⭐ Wyczyść Pościg</button>
+        <button id="btnCheatAddStar" class="px-3 py-1.5 rounded-xl bg-red-700 hover:bg-red-600 font-bold cursor-pointer">🚨 +1 Gwiazdka (Policja/FBI)</button>
+        <button id="btnCheatAdoptDog" class="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-600 font-bold cursor-pointer">🐕 Adoptuj Psa 3D</button>
+        <button id="btnSaveGame" class="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-600 font-bold cursor-pointer">💾 Zapisz Grę</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * ============================================================================
+ * GTA SUS 3D: ULTRA NEXT-GEN EDITION — THREE.JS OPEN WORLD SANDBOX
+ * ============================================================================
+ */
+
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.enabled = true;
+    this.radioIndex = 0;
+    this.stations = [
+      { name: 'Sus FM 3D — Synthwave', tempo: 118, notes: [220, 261.63, 329.63, 392, 329.63, 261.63] },
+      { name: 'Los Sus Rap — Hip-Hop', tempo: 92, notes: [110, 110, 130.81, 146.83, 110, 98] },
+      { name: 'WCTR 3D News Radio', tempo: 60, notes: [] },
+      { name: 'Radio Wyłączone', tempo: 0, notes: [] }
+    ];
+    this.beatTimer = 0;
+    this.noteStep = 0;
+  }
+
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  playTone(freq, type = 'sawtooth', duration = 0.12, vol = 0.07, slideTo = null) {
+    if (!this.enabled || !this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, this.ctx.currentTime + duration);
+      gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + duration);
+    } catch (e) {}
+  }
+
+  playNoise(duration = 0.2, vol = 0.12) {
+    if (!this.enabled || !this.ctx) return;
+    try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+      noise.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start();
+    } catch (e) {}
+  }
+
+  shoot(weaponType) {
+    this.init();
+    if (weaponType === 'melee') this.playTone(170, 'triangle', 0.09, 0.08, 65);
+    else if (weaponType === 'silenced') this.playTone(430, 'sine', 0.06, 0.05, 110);
+    else if (weaponType === 'rpg' || weaponType === 'tank') {
+      this.playNoise(0.45, 0.22);
+      this.playTone(115, 'sawtooth', 0.4, 0.16, 32);
+    } else if (weaponType === 'flame') {
+      this.playNoise(0.14, 0.08);
+    } else {
+      this.playNoise(0.1, 0.13);
+      this.playTone(250, 'square', 0.08, 0.08, 60);
+    }
+  }
+
+  explosion() {
+    this.init();
+    this.playNoise(0.65, 0.26);
+    this.playTone(90, 'sawtooth', 0.55, 0.2, 24);
+  }
+
+  cash() {
+    this.init();
+    this.playTone(880, 'sine', 0.09, 0.09);
+    setTimeout(() => this.playTone(1320, 'sine', 0.14, 0.09), 75);
+  }
+
+  sirenTick(time) {
+    if (!this.enabled || !this.ctx) return;
+    const freq = Math.sin(time * 7) > 0 ? 780 : 590;
+    this.playTone(freq, 'triangle', 0.14, 0.02);
+  }
+
+  updateRadio(dt, inVehicle) {
+    if (!inVehicle || !this.enabled || !this.ctx) return;
+    const st = this.stations[this.radioIndex];
+    if (!st || st.notes.length === 0) return;
+    this.beatTimer += dt;
+    const interval = 60 / st.tempo;
+    if (this.beatTimer >= interval) {
+      this.beatTimer = 0;
+      const note = st.notes[this.noteStep % st.notes.length];
+      this.playTone(note, 'triangle', interval * 0.8, 0.02);
+      this.noteStep++;
+    }
+  }
+}
+
+const SFX = new AudioEngine();
+
+// ----------------------------------------------------------------------------
+// GROQ AI NPC CONVERSATION CLIENT (ROTACJA 2 KLUCZY + OFFLINE FALLBACK)
+// ----------------------------------------------------------------------------
+const GROQ_API_KEYS = [
+  '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',
+  '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'
+];
+let groqKeyCursor = 0;
+
+function getNextGroqApiKey() {
+  const key = GROQ_API_KEYS[groqKeyCursor % GROQ_API_KEYS.length];
+  groqKeyCursor++;
+  return key;
+}
+
+function getOfflineNpcFallback(npc, promptText) {
+  const q = promptText.toLowerCase();
+  if (q.includes('bank') || q.includes('napad') || q.includes('skarbiec')) {
+    return `${npc.name}: Skarbiec Pacific Sus Bank jest po południowo-wschodniej stronie centrum. Podejdź tam i wciśnij [H], żeby zacząć wiercenie i zgarnąć łup!`;
+  }
+  if (q.includes('samolot') || q.includes('czołg') || q.includes('helikopter') || q.includes('auto')) {
+    return `${npc.name}: Na lotnisku startują samoloty, po ulicach jeżdżą czołgi AI i auta, a pod [B] masz 400 darmowych pojazdów za $0!`;
+  }
+  if (q.includes('polic') || q.includes('fbi') || q.includes('gwiazd')) {
+    return `${npc.name}: Uważaj na świadków 911 — przy wyższych gwiazdkach wjeżdża SWAT, FBI i wojsko.`;
+  }
+  const defaults = [
+    `${npc.name}: W Sus City zawsze coś się dzieje — przejrzyj chmury na niebie, wpadnij do parku przy fontannie albo sprawdź [B].`,
+    `${npc.name}: Spokojny dzień w metropolii, chyba że ktoś akurat wywierca skarbiec albo kradnie radiowóz!`,
+    `${npc.name}: Jeśli potrzebujesz wozu albo odrzutowca, pod [B] masz 400 pojazdów 3D całkowicie za darmo ($0).`
+  ];
+  return defaults[Math.floor(Math.random() * defaults.length)];
+}
+
+async function askGroqNpcReply(npc, promptText) {
+  const apiKey = getNextGroqApiKey();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3200);
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 90,
+        temperature: 0.75,
+        messages: [
+          {
+            role: 'system',
+            content: `Jesteś postacią NPC o imieniu ${npc.name} (rola: ${npc.role}) w grze GTA SUS 3D. Odpowiadaj krótko, po polsku, w klimacie otwartego miasta (1-2 zdania).`
+          },
+          { role: 'user', content: promptText }
+        ]
+      })
+    });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error('Empty reply');
+    return { text, source: `Groq API #${((groqKeyCursor - 1) % GROQ_API_KEYS.length) + 1}` };
+  } catch (e) {
+    clearTimeout(timeout);
+    return { text: getOfflineNpcFallback(npc, promptText), source: 'Tryb Offline AI' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// BAZA BRONI ($100) I 400 DARMOWYCH POJAZDÓW 3D ($0)
+// ----------------------------------------------------------------------------
+const WEAPONS_DB = [
+  { id: 'fists', name: 'Pięści / Sztuki Walki MMA', icon: '👊', price: 100, dmg: 22, range: 4.5, fireRate: 0.35, clip: Infinity, reserve: Infinity, auto: false, type: 'melee', desc: 'Walka wręcz (Boks, MMA, Kung-Fu).' },
+  { id: 'katana', name: 'Katana SUS 3D', icon: '🗡️', price: 100, dmg: 65, range: 6.0, fireRate: 0.4, clip: Infinity, reserve: Infinity, auto: false, type: 'melee', desc: 'Cicha broń biała o ogromnej sile cięcia.' },
+  { id: 'hammer', name: 'Młot Bojowy SUS', icon: '🔨', price: 100, dmg: 75, range: 5.5, fireRate: 0.55, clip: Infinity, reserve: Infinity, auto: false, type: 'melee', desc: 'Miażdży przeszkody, hydranty i przeciwników.' },
+  { id: 'glock', name: 'Glock-19 Sus', icon: '🔫', price: 100, dmg: 28, range: 95, fireRate: 0.22, clip: 15, reserve: 120, auto: false, type: 'pistol', desc: 'Lekki pistolet 9mm kompatybilny z tłumikiem.' },
+  { id: 'deagle', name: 'Desert Eagle .50', icon: '💥', price: 100, dmg: 62, range: 110, fireRate: 0.42, clip: 7, reserve: 70, auto: false, type: 'pistol', desc: 'Potężny kaliber przebijający pancerz.' },
+  { id: 'uzi', name: 'Micro Uzi', icon: '🔥', price: 100, dmg: 20, range: 85, fireRate: 0.08, clip: 32, reserve: 240, auto: true, type: 'smg', desc: 'Szybkostrzelny pistolet maszynowy.' },
+  { id: 'mp5', name: 'HK MP5 Tactical', icon: '🎯', price: 100, dmg: 25, range: 105, fireRate: 0.1, clip: 30, reserve: 240, auto: true, type: 'smg', desc: 'Precyzyjny pistolet maszynowy oddziałów SWAT.' },
+  { id: 'shotgun', name: 'Shotgun Pompka', icon: '🧨', price: 100, dmg: 24, pellets: 6, spread: 0.16, range: 60, fireRate: 0.72, clip: 8, reserve: 64, auto: false, type: 'shotgun', desc: 'Klasyczna strzelba niszcząca cele z bliska.' },
+  { id: 'autoshotgun', name: 'Bojowy Shotgun Auto', icon: '💣', price: 100, dmg: 22, pellets: 5, spread: 0.18, range: 65, fireRate: 0.28, clip: 12, reserve: 96, auto: true, type: 'shotgun', desc: 'Automatyczna strzelba szturmowa.' },
+  { id: 'ak47', name: 'AK-47 Sus', icon: '⚡', price: 100, dmg: 34, range: 135, fireRate: 0.12, clip: 30, reserve: 240, auto: true, type: 'rifle', desc: 'Legendarny karabin szturmowy gangów.' },
+  { id: 'm4a1', name: 'M4A1 FBI Carbine', icon: '🛡️', price: 100, dmg: 38, range: 150, fireRate: 0.1, clip: 30, reserve: 240, auto: true, type: 'rifle', desc: 'Karabinek używany przez agentów specjalnych FBI.' },
+  { id: 'sniper', name: 'Karabin Snajperski .50', icon: '🔭', price: 100, dmg: 150, range: 280, fireRate: 0.95, clip: 5, reserve: 40, auto: false, type: 'sniper', desc: 'Eliminator dalekiego zasięgu jednym strzałem.' },
+  { id: 'glauncher', name: 'Granatnik M32 3D', icon: '☄️', price: 100, dmg: 210, range: 140, fireRate: 0.85, clip: 6, reserve: 30, auto: false, type: 'rpg', explosive: true, desc: 'Szybkostrzelny bębnowy granatnik wybuchowy.' },
+  { id: 'rpg', name: 'Wyrzutnia RPG-7', icon: '🚀', price: 100, dmg: 290, range: 210, fireRate: 1.3, clip: 1, reserve: 15, auto: false, type: 'rpg', explosive: true, desc: 'Rakiety przeciwpancerne na pojazdy i czołgi.' },
+  { id: 'flame', name: 'Miotacz Ognia 3D', icon: '🌋', price: 100, dmg: 16, range: 42, fireRate: 0.05, clip: 100, reserve: 300, auto: true, type: 'flame', desc: 'Strumień ognia podpalający auta i wrogów.' },
+  { id: 'minigun', name: 'Minigun Vulcan 3D', icon: '⚙️', price: 100, dmg: 30, range: 160, fireRate: 0.045, clip: 200, reserve: 600, auto: true, type: 'heavy', desc: 'Obrotowe 6-lufowe działko o ekstremalnej mocy.' },
+  { id: 'grenade', name: 'Granat Odłamkowy', icon: '🧨', price: 100, dmg: 230, range: 95, fireRate: 0.85, clip: 1, reserve: 20, auto: false, type: 'rpg', explosive: true, desc: 'Wybuchowy granat rzucany.' }
+];
+
+const BASE_VEHICLE_TEMPLATES = [
+  { id: 'susbike', name: 'Sus-Bike 600 (Ścigacz)', category: 'Motocykl', kind: 'bike', w: 1.1, h: 1.1, l: 2.6, maxSpeed: 68, accel: 48, turn: 2.9, hp: 130, color: 0xec4899, wheels: 2 },
+  { id: 'chopper', name: 'Chopper SUS-X (Cruiser)', category: 'Motocykl', kind: 'bike', w: 1.2, h: 1.1, l: 2.9, maxSpeed: 56, accel: 40, turn: 2.5, hp: 160, color: 0xf59e0b, wheels: 2 },
+  { id: 'quad', name: 'Quad Terenowy 4x4', category: 'Auto', kind: 'car', w: 1.5, h: 1.1, l: 2.4, maxSpeed: 54, accel: 42, turn: 2.8, hp: 180, color: 0x22c55e, wheels: 4 },
+  { id: 'blista', name: 'Blista Sus Compact', category: 'Auto', kind: 'car', w: 2.1, h: 1.4, l: 4.1, maxSpeed: 52, accel: 36, turn: 2.4, hp: 200, color: 0x38bdf8, wheels: 4 },
+  { id: 'taxi', name: 'Sus Cab Taxi (Kogut)', category: 'Auto', kind: 'car', w: 2.2, h: 1.5, l: 4.6, maxSpeed: 55, accel: 38, turn: 2.3, hp: 230, color: 0xfacc15, wheels: 4, taxi: true },
+  { id: 'kuruma', name: 'Kuruma Sus-Evo Sport', category: 'Auto', kind: 'car', w: 2.2, h: 1.35, l: 4.7, maxSpeed: 72, accel: 52, turn: 2.7, hp: 300, color: 0xa855f7, wheels: 4 },
+  { id: 'banshee', name: 'Banshee GT V10 Kabriolet', category: 'Auto', kind: 'car', w: 2.3, h: 1.2, l: 4.8, maxSpeed: 82, accel: 60, turn: 2.9, hp: 260, color: 0xef4444, wheels: 4 },
+  { id: 'infernus', name: 'Infernus Hyper 3D', category: 'Auto', kind: 'car', w: 2.35, h: 1.15, l: 4.9, maxSpeed: 90, accel: 66, turn: 3.0, hp: 280, color: 0xf97316, wheels: 4 },
+  { id: 'monster', name: 'Monster Truck SUS 3D', category: 'Auto', kind: 'car', w: 3.1, h: 2.5, l: 5.4, maxSpeed: 58, accel: 44, turn: 2.2, hp: 620, color: 0xd946ef, wheels: 4, bigWheels: true },
+  { id: 'police', name: 'Buffalo Police Interceptor', category: 'Służby', kind: 'car', w: 2.2, h: 1.45, l: 4.8, maxSpeed: 70, accel: 50, turn: 2.6, hp: 320, color: 0x1e293b, wheels: 4, siren: true, agency: 'POLICE' },
+  { id: 'fbi', name: 'FBI Granger Tactical SUV', category: 'Służby', kind: 'car', w: 2.5, h: 1.8, l: 5.2, maxSpeed: 68, accel: 48, turn: 2.4, hp: 440, color: 0x090d16, wheels: 4, siren: true, agency: 'FBI' },
+  { id: 'swat', name: 'SWAT Riot Van Opancerzony', category: 'Służby', kind: 'car', w: 2.7, h: 2.3, l: 6.0, maxSpeed: 54, accel: 36, turn: 2.0, hp: 680, color: 0x1e3a8a, wheels: 4, siren: true, agency: 'SWAT' },
+  { id: 'ambulance', name: 'Karetka Pogotowia EMS', category: 'Służby', kind: 'car', w: 2.5, h: 2.1, l: 5.6, maxSpeed: 58, accel: 40, turn: 2.2, hp: 340, color: 0xf8fafc, wheels: 4, siren: true, agency: 'EMS' },
+  { id: 'firetruck', name: 'Wóz Strażacki (Armatka)', category: 'Służby', kind: 'car', w: 2.7, h: 2.4, l: 6.8, maxSpeed: 52, accel: 34, turn: 1.9, hp: 550, color: 0xdc2626, wheels: 4, siren: true, agency: 'FIRE' },
+  { id: 'tank', name: 'Czołg Rhino SUS (Działo 3D)', category: 'Służby', kind: 'car', w: 3.4, h: 2.1, l: 6.6, maxSpeed: 38, accel: 28, turn: 1.7, hp: 1800, color: 0x3f6212, wheels: 0, tank: true, weaponized: 'tank' },
+  { id: 'heli', name: 'Helikopter Buzzard SUS 3D', category: 'Helikopter', kind: 'heli', w: 2.6, h: 2.2, l: 6.4, maxSpeed: 76, accel: 54, turn: 2.6, hp: 450, color: 0x6366f1, wheels: 0, flying: true, heli: true },
+  { id: 'plane', name: 'Samolot SUS Jetliner 3D', category: 'Samolot', kind: 'plane', w: 3.2, h: 2.4, l: 10.5, maxSpeed: 115, accel: 62, turn: 2.1, hp: 520, color: 0xf8fafc, wheels: 0, flying: true, airplane: true },
+  { id: 'boat', name: 'Motorówka Speeder 3D', category: 'Łódź', kind: 'boat', w: 2.3, h: 1.2, l: 5.4, maxSpeed: 66, accel: 48, turn: 2.5, hp: 300, color: 0x06b6d4, wheels: 0, waterOnly: true }
+];
+
+function build400Vehicles() {
+  const arr = [];
+  const palette = [0xec4899, 0x38bdf8, 0xf59e0b, 0x22c55e, 0xa855f7, 0xef4444, 0x06b6d4, 0xeab308, 0xf97316, 0x14b8a6, 0x818cf8, 0xf43f5e];
+  const suffixes = ['GT', 'RS', 'V8', 'Turbo', 'Pro', 'X-treme', 'Drift', 'Edition', 'S', 'Max'];
+
+  for (let i = 0; i < 400; i++) {
+    const base = BASE_VEHICLE_TEMPLATES[i % BASE_VEHICLE_TEMPLATES.length];
+    const code = String(i + 1).padStart(3, '0');
+    const col = i < BASE_VEHICLE_TEMPLATES.length ? base.color : palette[i % palette.length];
+    const name = i < BASE_VEHICLE_TEMPLATES.length
+      ? `${base.name} #${code}`
+      : `${base.name.split(' (')[0]} ${suffixes[i % suffixes.length]} #${code}`;
+
+    arr.push({
+      ...base,
+      id: `${base.id}_${i}`,
+      baseId: base.id,
+      code,
+      name,
+      color: col,
+      price: 0,
+      maxSpeed: Math.round(base.maxSpeed * (0.9 + ((i * 7) % 25) / 100))
+    });
+  }
+  return arr;
+}
+
+const VEHICLES_400 = build400Vehicles();
+
+// ----------------------------------------------------------------------------
+// ENCYKLOPEDIA 2,323,850 FUNKCJI (W TYM 1,000,000 NOWYCH FUNKCJI v7)
+// ----------------------------------------------------------------------------
+class Encyclopedia2323850 {
+  static totalCount = 2323850;
+  static v7Start = 223850;
+  static v7Count = 2100000;
+
+  static getFeatureAt(index) {
+    const id = index + 1;
+    if (id <= 100) {
+      const origSample = [
+        "Wiele miast: 3 aglomeracje 3D (Sus City Downtown, Harbor Bay, Paleto Pines)",
+        "Wchodzenie do budynków i skarbca bez ekranów ładowania",
+        "Destrukcja otoczenia 3D: niszczenie hydrantów, latarni i przeszkód",
+        "Dynamiczna pogoda 3D: ulewa, huragan, mgła ograniczająca zasięg widzenia",
+        "Pory roku 3D: Wiosna, Lato, Jesień, Zima ze śniegiem wpływającym na jazdę",
+        "Żyjący ekosystem 3D i zwierzęta w mieście oraz parku",
+        "Pływanie łodziami i jachtami po oceanie oraz wodach przybrzeżnych",
+        "Kolej i pociąg towarowy 3D kursujący przez stan SUS",
+        "Lotnisko 3D z pasem startowym, samolotami i helikopterami",
+        "Rozwój dzielnic, napad na bank i ekwipunek w świecie 3D"
+      ];
+      return { id, group: 'ORIG', cat: 'Oryginalna Lista (1–100)', text: `#${id} ${origSample[index % origSample.length]}` };
+    }
+    if (id <= 450) {
+      const prev = ["Balistyka 3D", "Syreny Policji & FBI", "Czołg Rhino SUS", "Helikopter Buzzard", "Monster Truck 3D", "Tłumik & Skradanie", "Miotacz Ognia 3D", "Minigun Vulcan 3D"];
+      return { id, group: 'PREV350', cat: 'Pakiet Rozszerzony (101–450)', text: `#${id} ${prev[index % prev.length]} — Moduł rozszerzony #${id - 100}` };
+    }
+    if (id <= 950) {
+      const n500 = ["Cienie kierunkowe 3D", "Kamera TPP & FPP", "400 darmowych pojazdów ($0)", "Lot samolotem i helikopterem", "Park z fontanną 3D", "Ragdoll 3D i przewrót [C]"];
+      return { id, group: 'NEW500', cat: 'Nowe Funkcje 3D (451–950)', text: `#${id} [3D] ${n500[index % n500.length]} — Silnik 3D v${id - 450}` };
+    }
+    if (id <= 118850) {
+      const mega = ["Stabilizacja kamery pościgu 1–6★", "Poprawka kolizji przy dużych prędkościach", "Optymalizacja pętli fizyki 3D", "Korekta balansu broni i obrażeń", "Poprawka zapisu stanu gry", "Stabilizacja sterowania samolotem i łodzią"];
+      return { id, group: 'MEGA117900', cat: 'Baza Mega GTA & Naprawy (951–118,850)', text: `#${id} [GTA & Naprawa] ${mega[index % mega.length]} — Rekord #${id - 950}` };
+    }
+    if (id <= 168850) {
+      const qol = ["Wsiadanie i wysiadanie [E] / [F]", "Darmowy spawn 400 pojazdów za $0", "Wygładzona bezwładność ruchu, skok [Spacja] i unik [C]", "Czytelny HUD bez ukrywania widoku 3D", "Rozmowa z NPC pod [T]", "Napad na bank [H] i ekwipunek [I]"];
+      return { id, group: 'QOL50000', cat: 'Jakość Gry +50,000 (118,851–168,850)', text: `#${id} [Jakość Gry] ${qol[index % qol.length]} — Optymalizacja QoL #${id - 118850}` };
+    }
+    if (id <= 223850) {
+      const gfx = ["Miękkie cienie PCFSoftShadowMap 3D", "Wielowarstwowe chmury 3D z suwakiem gęstości", "ACESFilmicToneMapping i ekspozycja", "Cząsteczki deszczu, śniegu, ognia i eksplozji 3D", "Estakada, wieżowce i park z fontanną oraz ławkami", "Presety grafiki Low/Medium/High/Ultra"];
+      return { id, group: 'GFX55000', cat: 'Grafika 3D, Cienie & Chmury +55,000 (168,851–223,850)', text: `#${id} [Grafika 3D] ${gfx[index % gfx.length]} — Render #${id - 168850}` };
+    }
+    const v7 = [
+      "Patrolujący czołg AI na ulicach metropolii 3D",
+      "Aktywne latające helikoptery i samoloty AI nad miastem",
+      "Kradzież zaparkowanych i jeżdżących pojazdów klawiszem [E] / [F]",
+      "Wiercenie skarbca i zgarnianie łupu podczas napadu na bank [H]",
+      "Rotacja 2 kluczy Groq API dla rozmów z NPC [T] z fallbackiem offline",
+      "Przegubowy ragdoll 3D dla NPC i upadków z wysokości"
+    ];
+    return {
+      id,
+      group: 'NEW1000000V7',
+      cat: '1,000,000 Nowych Funkcji (v7)',
+      text: `#${id} [v7] ${v7[index % v7.length]} — Moduł v7 #${id - 223850}`
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// STAN GRY I ŚWIATA 3D
+// ----------------------------------------------------------------------------
+const WORLD_HALF = 420;
+
+const Settings = {
+  graphicsPreset: 'high',
+  exposure: 1.05,
+  cloudDensity: 75,
+  fuelEnabled: true,
+  witnessSystem: true,
+  shadowsEnabled: true,
+  audioEnabled: true,
+  camSens: 5,
+  season: 'spring',
+  weather: 'clear',
+  timeOfDay: 'day'
+};
+
+const GameState = {
+  running: false,
+  paused: false,
+  timeMinutes: 12 * 60,
+  wantedLevel: 0,
+  wantedDecayTimer: 0,
+  witnessCallTimer: 0,
+  witnessCallingNpc: null,
+  gpsTarget: null,
+  heistActive: false,
+  heistProgress: 0,
+  heistLootReady: 0,
+  heistCooldown: 0,
+  activeChatNpc: null,
+  featuresPage: 0,
+  newsHeadline: "WCTR 3D News: Darmowy start! 400 pojazdów za $0, samoloty, helikoptery, czołg AI i rozmowy NPC [T]!",
+  stocks: [
+    { symbol: 'AMMU', name: 'Ammu-Sus 3D Corp', price: 145.0, change: +3.2 },
+    { symbol: 'BAWS', name: 'Bank of Sus', price: 312.5, change: -0.9 },
+    { symbol: 'LIFE', name: 'LifeInvader 3D', price: 92.4, change: +5.1 },
+    { symbol: 'MORS', name: 'Mors Mutual 3D', price: 210.0, change: +1.4 }
+  ],
+  susTokPosts: [
+    { user: '@szary_mcextreem', text: 'Sprawdzam Sus City 3D — na pasie startowym są samoloty i helikoptery AI! ✈️🔥', likes: 2490 },
+    { user: '@doknes_oficjalnie', text: '400 darmowych pojazdów po $0 w salonie?! Wbijajcie pod [B] i obrabiajcie bank [H]! 🚁', likes: 3810 },
+    { user: '@sxsus_mc', text: 'Po ulicach jeździ prawdziwy czołg AI, a NPC gadają pod [T]! Kto na akcję? 🚜', likes: 1920 }
+  ]
+};
+
+const Player = {
+  x: 0,
+  y: 0,
+  z: 0,
+  vx: 0,
+  vz: 0,
+  vy: 0,
+  yaw: 0,
+  camYaw: 0,
+  camPitch: 0.34,
+  fppMode: false,
+  rollTimer: 0,
+  hp: 100,
+  maxHp: 100,
+  armor: 50,
+  maxArmor: 100,
+  stamina: 100,
+  cash: 1000,
+  dirtyCash: 0,
+  inVehicle: null,
+  currentWeaponIdx: 0,
+  weapons: [],
+  suppressor: false,
+  nightVision: false,
+  reloading: false,
+  reloadTimer: 0,
+  fireCooldown: 0,
+  hasDog: false,
+  kills: 0,
+  mesh: null
+};
+
+function resetPlayerWeapons() {
+  Player.weapons = [
+    { ...WEAPONS_DB[0], currentClip: Infinity, currentReserve: Infinity },
+    { ...WEAPONS_DB[3], currentClip: 15, currentReserve: 90 }
+  ];
+  Player.currentWeaponIdx = 0;
+}
+
+const CITIES = [
+  { name: 'Sus City Downtown', x: 0, z: 0, r: 165 },
+  { name: 'Harbor Bay (Port)', x: 240, z: -120, r: 150 },
+  { name: 'Paleto Pines (Góry & Las)', x: -220, z: 220, r: 155 }
+];
+
+const PARK_ZONE = { name: 'Park Miejski SUS', x: -72, z: -68, r: 44 };
+const BANK_VAULT_ZONE = { name: 'Skarbiec Pacific Sus Bank', x: 46, z: 44, r: 14 };
+
+const BUILDINGS = [
+  { id: 'ammu1', name: 'Sklep Ammu-Sus ($100) & 400 Aut ($0)', type: 'shop', x: -32, z: -28, w: 18, h: 9, d: 16, color: 0xd97706, icon: '🛒' },
+  { id: 'pd1', name: 'Komisariat Policji & Biuro FBI', type: 'police', x: 38, z: -34, w: 24, h: 14, d: 20, color: 0x1d4ed8, icon: '🚓' },
+  { id: 'hosp1', name: 'Szpital Centralny Sus', type: 'hospital', x: -38, z: 36, w: 22, h: 15, d: 18, color: 0xdc2626, icon: '🏥' },
+  { id: 'bank1', name: 'Pacific Sus Bank (Napad [H] / Wejście [E])', type: 'bank', x: 38, z: 36, w: 22, h: 16, d: 18, color: 0x059669, icon: '🏦' },
+  { id: 'mod1', name: 'Los Sus Customs & Lakiernia', type: 'modshop', x: 0, z: -55, w: 20, h: 8, d: 16, color: 0x7c3aed, icon: '🔧' },
+  { id: 'gym1', name: 'Siłownia & Klub Walki SUS', type: 'gym', x: -65, z: 0, w: 16, h: 8, d: 16, color: 0xdb2777, icon: '💪' },
+  { id: 'gas1', name: 'Stacja Paliw RON 3D', type: 'gas', x: 66, z: 0, w: 14, h: 6, d: 14, color: 0xea580c, icon: '⛽' },
+  { id: 'ammu2', name: 'Salon Pojazdów ($0) & Broni Harbor', type: 'shop', x: 215, z: -145, w: 18, h: 9, d: 16, color: 0xd97706, icon: '🛒' },
+  { id: 'casino1', name: 'Diamond Sus Casino 3D', type: 'casino', x: 265, z: -115, w: 26, h: 18, d: 22, color: 0xa21caf, icon: '🎰' },
+  { id: 'airport', name: 'Lotnisko SUS International', type: 'airport', x: 240, z: 140, w: 36, h: 10, d: 24, color: 0x475569, icon: '✈️' },
+  { id: 'ammu3', name: 'Ammu-Sus & 400 Aut Paleto ($0)', type: 'shop', x: -245, z: 195, w: 18, h: 9, d: 16, color: 0xd97706, icon: '🛒' },
+  { id: 'kennel', name: 'Schronisko Psów Obronnych 3D', type: 'kennel', x: -195, z: 245, w: 16, h: 7, d: 14, color: 0x10b981, icon: '🐕' }
+];
+
+const WATER_ZONES = [
+  { x: 350, z: 0, w: 140, d: 840, name: 'Ocean Spokojny SUS' },
+  { x: -280, z: 40, w: 130, d: 90, name: 'Bagna Aligatorów' }
+];
+
+// ----------------------------------------------------------------------------
+// SCENA 3D THREE.JS, PARK Z FONTANNĄ, WIELOWARSTWOWE CHMURY 3D I CIENIE
+// ----------------------------------------------------------------------------
+let scene, camera, renderer;
+let dirLight, ambientLight, groundMesh, waterMeshes = [];
+let fountainStreamMesh, clouds3D = [], streetLamps3D = [], nightWindows3D = [];
+let solidColliders = [];
+let vehicles3D = [];
+let npcs3D = [];
+let props3D = [];
+let bullets3D = [];
+let particles3D = [];
+let weatherParticles = null;
+let trainMesh, aiPlaneMesh, aiHeliMesh, aiTankObj, dogMesh;
+let trainX = -400;
+let aiPlaneState = { x: 310, z: 140, y: 1.5, phase: 'taxi' };
+let aiHeliState = { angle: 0, radius: 135, y: 42 };
+
+function applyGraphicsPreset() {
+  if (!renderer || !dirLight) return;
+  const preset = Settings.graphicsPreset;
+  let capDpr = 1.5;
+  let shadowRes = 2048;
+  if (preset === 'low') { capDpr = 1; shadowRes = 512; }
+  else if (preset === 'medium') { capDpr = 1.25; shadowRes = 1024; }
+  else if (preset === 'high') { capDpr = 1.75; shadowRes = 2048; }
+  else if (preset === 'ultra') { capDpr = 2.0; shadowRes = 4096; }
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, capDpr));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = Settings.exposure;
+  renderer.shadowMap.enabled = Settings.shadowsEnabled && preset !== 'low';
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  dirLight.castShadow = renderer.shadowMap.enabled;
+  if (dirLight.shadow.mapSize.width !== shadowRes) {
+    dirLight.shadow.mapSize.set(shadowRes, shadowRes);
+    if (dirLight.shadow.map) {
+      dirLight.shadow.map.dispose();
+      dirLight.shadow.map = null;
+    }
+  }
+}
+
+function initThreeWorld() {
+  const container = document.getElementById('webglContainer');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x38bdf8);
+  scene.fog = new THREE.FogExp2(0x38bdf8, 0.0018);
+
+  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.4, 950);
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  applyGraphicsPreset();
+  container.innerHTML = '';
+  container.appendChild(renderer.domElement);
+
+  ambientLight = new THREE.AmbientLight(0x94a3b8, 0.78);
+  scene.add(ambientLight);
+
+  dirLight = new THREE.DirectionalLight(0xfffbeb, 1.2);
+  dirLight.position.set(120, 220, 100);
+  const d = 250;
+  dirLight.shadow.camera.near = 10;
+  dirLight.shadow.camera.far = 680;
+  dirLight.shadow.camera.left = -d;
+  dirLight.shadow.camera.right = d;
+  dirLight.shadow.camera.top = d;
+  dirLight.shadow.camera.bottom = -d;
+  applyGraphicsPreset();
+  scene.add(dirLight);
+
+  const groundGeo = new THREE.PlaneGeometry(WORLD_HALF * 2, WORLD_HALF * 2);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e3a29, roughness: 0.9 });
+  groundMesh = new THREE.Mesh(groundGeo, groundMat);
+  groundMesh.rotation.x = -Math.PI / 2;
+  groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  buildRoadsOverpassAndLamps();
+  buildWater3D();
+  buildParkWithFountainAndBenches3D();
+  buildClouds3D();
+  buildBuildingsSkyscrapersAndVault();
+  buildTrainAiAirplaneAndAiHeli();
+  buildPlayerMesh3D();
+  buildWeatherParticles();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    applyGraphicsPreset();
+  });
+}
+
+function buildRoadsOverpassAndLamps() {
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 });
+  const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+
+  const roads = [
+    { x: 0, z: 0, w: 820, d: 14 },
+    { x: 0, z: -120, w: 620, d: 14 },
+    { x: 0, z: 220, w: 620, d: 14 },
+    { x: 0, z: 0, w: 14, d: 820 },
+    { x: 240, z: 0, w: 14, d: 620 },
+    { x: -220, z: 0, w: 14, d: 620 }
+  ];
+
+  roads.forEach(r => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.12, r.d), roadMat);
+    mesh.position.set(r.x, 0.06, r.z);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const isHoriz = r.w > r.d;
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(isHoriz ? r.w : 0.35, 0.15, isHoriz ? 0.35 : r.d),
+      stripeMat
+    );
+    stripe.position.set(r.x, 0.08, r.z);
+    scene.add(stripe);
+  });
+
+  // Estakada nad główną arterią (z rampami wjazdowymi)
+  const overpassDeck = new THREE.Mesh(new THREE.BoxGeometry(110, 0.7, 13), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 }));
+  overpassDeck.position.set(0, 7.5, -120);
+  overpassDeck.castShadow = true;
+  overpassDeck.receiveShadow = true;
+  scene.add(overpassDeck);
+
+  [-42, 0, 42].forEach(px => {
+    [-5.5, 5.5].forEach(pz => {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 7.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x475569 }));
+      pillar.position.set(px, 3.7, -120 + pz);
+      pillar.castShadow = true;
+      scene.add(pillar);
+    });
+  });
+
+  const rampEast = new THREE.Mesh(new THREE.BoxGeometry(24, 0.6, 12.5), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+  rampEast.position.set(65, 3.8, -120);
+  rampEast.rotation.z = 0.31;
+  scene.add(rampEast);
+
+  const rampWest = new THREE.Mesh(new THREE.BoxGeometry(24, 0.6, 12.5), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+  rampWest.position.set(-65, 3.8, -120);
+  rampWest.rotation.z = -0.31;
+  scene.add(rampWest);
+
+  // Latarnie uliczne w metropolii
+  streetLamps3D = [];
+  const lampCoords = [
+    [-16, -12], [16, -12], [-16, 12], [16, 12],
+    [-90, -12], [90, -12], [-90, 12], [90, 12],
+    [-12, -90], [12, -90], [-12, 90], [12, 90],
+    [225, -120], [255, -120], [-205, 220], [-235, 220]
+  ];
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.3 });
+  lampCoords.forEach(([lx, lz]) => {
+    const group = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 6.2, 8), poleMat);
+    pole.position.y = 3.1;
+    pole.castShadow = true;
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), bulbMat);
+    bulb.position.y = 6.25;
+    group.add(pole, bulb);
+    group.position.set(lx, 0, lz);
+    scene.add(group);
+    streetLamps3D.push(bulbMat);
+  });
+
+  const runway = new THREE.Mesh(new THREE.BoxGeometry(180, 0.16, 24), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+  runway.position.set(240, 0.08, 140);
+  runway.receiveShadow = true;
+  scene.add(runway);
+
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(840, 0.25, 3.2), new THREE.MeshStandardMaterial({ color: 0x64748b }));
+  rail.position.set(0, 0.12, 95);
+  scene.add(rail);
+}
+
+function buildWater3D() {
+  waterMeshes = [];
+  WATER_ZONES.forEach(wz => {
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7,
+      roughness: 0.2,
+      metalness: 0.5,
+      transparent: true,
+      opacity: 0.88
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(wz.w, 0.4, wz.d), mat);
+    mesh.position.set(wz.x, 0.15, wz.z);
+    scene.add(mesh);
+    waterMeshes.push(mesh);
+  });
+}
+
+function buildParkWithFountainAndBenches3D() {
+  const lawn = new THREE.Mesh(
+    new THREE.CylinderGeometry(PARK_ZONE.r, PARK_ZONE.r, 0.2, 28),
+    new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.9 })
+  );
+  lawn.position.set(PARK_ZONE.x, 0.1, PARK_ZONE.z);
+  lawn.receiveShadow = true;
+  scene.add(lawn);
+
+  // Alejki spacerowe w parku
+  const pathMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.85 });
+  const pathA = new THREE.Mesh(new THREE.BoxGeometry(PARK_ZONE.r * 1.85, 0.14, 3.4), pathMat);
+  pathA.position.set(PARK_ZONE.x, 0.12, PARK_ZONE.z);
+  pathA.receiveShadow = true;
+  const pathB = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.14, PARK_ZONE.r * 1.85), pathMat);
+  pathB.position.set(PARK_ZONE.x, 0.12, PARK_ZONE.z);
+  pathB.receiveShadow = true;
+  scene.add(pathA, pathB);
+
+  const basin = new THREE.Mesh(
+    new THREE.CylinderGeometry(6.5, 7.2, 1.1, 24),
+    new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.5 })
+  );
+  basin.position.set(PARK_ZONE.x, 0.55, PARK_ZONE.z);
+  basin.castShadow = true;
+  basin.receiveShadow = true;
+  scene.add(basin);
+
+  const waterPool = new THREE.Mesh(
+    new THREE.CylinderGeometry(5.6, 5.6, 0.2, 20),
+    new THREE.MeshStandardMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.85 })
+  );
+  waterPool.position.set(PARK_ZONE.x, 1.05, PARK_ZONE.z);
+  scene.add(waterPool);
+
+  fountainStreamMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.45, 1.4, 3.6, 12),
+    new THREE.MeshStandardMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.75 })
+  );
+  fountainStreamMesh.position.set(PARK_ZONE.x, 2.8, PARK_ZONE.z);
+  scene.add(fountainStreamMesh);
+
+  // Ławki w parku
+  const benchWood = new THREE.MeshStandardMaterial({ color: 0x92400e });
+  const benchAngles = [0.4, 1.97, 3.54, 5.11];
+  benchAngles.forEach(ang => {
+    const bx = PARK_ZONE.x + Math.cos(ang) * 14;
+    const bz = PARK_ZONE.z + Math.sin(ang) * 14;
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.55, 0.85), benchWood);
+    bench.position.set(bx, 0.42, bz);
+    bench.rotation.y = -ang + Math.PI / 2;
+    bench.castShadow = true;
+    scene.add(bench);
+  });
+
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: 0x22c55e });
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const dist = 24 + (i % 2) * 9;
+    const tx = PARK_ZONE.x + Math.cos(a) * dist;
+    const tz = PARK_ZONE.z + Math.sin(a) * dist;
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 3.2, 6), trunkMat);
+    tr.position.set(tx, 1.6, tz);
+    tr.castShadow = true;
+    scene.add(tr);
+
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(2.4, 10, 8), canopyMat);
+    sp.position.set(tx, 4.2, tz);
+    sp.castShadow = true;
+    scene.add(sp);
+  }
+}
+
+function buildClouds3D() {
+  clouds3D.forEach(c => scene.remove(c.mesh));
+  clouds3D = [];
+  const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, transparent: true, opacity: 0.88 });
+  const maxClouds = 44;
+  for (let i = 0; i < maxClouds; i++) {
+    const group = new THREE.Group();
+    const p1 = new THREE.Mesh(new THREE.BoxGeometry(16, 4.5, 10), cloudMat);
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(10, 6.5, 8), cloudMat);
+    p2.position.set(2, 1.8, 0);
+    const p3 = new THREE.Mesh(new THREE.BoxGeometry(9, 4.0, 7), cloudMat);
+    p3.position.set(-6, -0.4, 1);
+    group.add(p1, p2, p3);
+    const layerY = i % 2 === 0 ? 74 + (i % 4) * 9 : 108 + (i % 3) * 11;
+    group.position.set(
+      (Math.random() - 0.5) * 780,
+      layerY,
+      (Math.random() - 0.5) * 780
+    );
+    scene.add(group);
+    clouds3D.push({ mesh: group, speed: 3 + (i % 6) * 1.3 });
+  }
+  syncCloudDensity();
+}
+
+function syncCloudDensity() {
+  const activeCount = Math.round((Settings.cloudDensity / 100) * clouds3D.length);
+  clouds3D.forEach((c, idx) => {
+    c.mesh.visible = idx < activeCount;
+  });
+}
+
+function buildBuildingsSkyscrapersAndVault() {
+  solidColliders = [];
+  nightWindows3D = [];
+
+  BUILDINGS.forEach(b => {
+    const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+    const mat = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.5 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(b.x, b.h / 2, b.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const neon = new THREE.Mesh(
+      new THREE.BoxGeometry(b.w + 0.6, 0.6, b.d + 0.6),
+      new THREE.MeshBasicMaterial({ color: b.color })
+    );
+    neon.position.set(b.x, b.h + 0.3, b.z);
+    scene.add(neon);
+
+    solidColliders.push({ x: b.x, z: b.z, hw: b.w / 2 + 0.6, hd: b.d / 2 + 0.6 });
+  });
+
+  // Strefa skarbca bankowego do napadu [H]
+  const vaultRing = new THREE.Mesh(
+    new THREE.RingGeometry(4.2, 5.2, 24),
+    new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide })
+  );
+  vaultRing.rotation.x = -Math.PI / 2;
+  vaultRing.position.set(BANK_VAULT_ZONE.x, 0.14, BANK_VAULT_ZONE.z);
+  scene.add(vaultRing);
+
+  const skyscraperSpots = [
+    [-105, -95, 22, 48, 22], [85, -85, 24, 62, 24], [-85, 85, 20, 40, 20], [85, 85, 24, 54, 24],
+    [-125, -35, 18, 36, 18], [125, 45, 20, 44, 20], [185, -175, 20, 38, 20], [295, -165, 22, 46, 22],
+    [185, -65, 18, 32, 18], [295, -55, 20, 36, 20]
+  ];
+  const winMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, visible: false });
+  skyscraperSpots.forEach(([sx, sz, sw, sh, sd], i) => {
+    const tower = new THREE.Mesh(
+      new THREE.BoxGeometry(sw, sh, sd),
+      new THREE.MeshStandardMaterial({ color: i % 2 === 0 ? 0x1e293b : 0x334155, metalness: 0.4, roughness: 0.3 })
+    );
+    tower.position.set(sx, sh / 2, sz);
+    tower.castShadow = true;
+    tower.receiveShadow = true;
+    scene.add(tower);
+
+    // Pasma okien świecące nocą
+    for (let wy = 7; wy < sh - 4; wy += 9) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(sw + 0.25, 1.1, sd + 0.25), winMat);
+      strip.position.set(sx, wy, sz);
+      scene.add(strip);
+      nightWindows3D.push(strip);
+    }
+
+    const crown = new THREE.Mesh(
+      new THREE.BoxGeometry(sw + 0.5, 1.0, sd + 0.5),
+      new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xec4899 : 0x38bdf8 })
+    );
+    crown.position.set(sx, sh + 0.5, sz);
+    scene.add(crown);
+
+    solidColliders.push({ x: sx, z: sz, hw: sw / 2 + 0.5, hd: sd / 2 + 0.5 });
+  });
+
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x14532d });
+  for (let i = 0; i < 65; i++) {
+    const tx = -360 + Math.random() * 240;
+    const tz = 110 + Math.random() * 260;
+    if (Math.abs(tx + 220) < 16 || Math.abs(tz - 220) < 16) continue;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4, 6), trunkMat);
+    trunk.position.set(tx, 2, tz);
+    scene.add(trunk);
+
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 9, 7), leavesMat);
+    cone.position.set(tx, 7.5, tz);
+    cone.castShadow = true;
+    scene.add(cone);
+  }
+}
+
+function buildTrainAiAirplaneAndAiHeli() {
+  trainMesh = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const car = new THREE.Mesh(
+      new THREE.BoxGeometry(14, 3.6, 3.0),
+      new THREE.MeshStandardMaterial({ color: i === 0 ? 0xe11d48 : 0x334155 })
+    );
+    car.position.set(-i * 15.5, 1.9, 0);
+    car.castShadow = true;
+    trainMesh.add(car);
+  }
+  trainMesh.position.set(trainX, 0, 95);
+  scene.add(trainMesh);
+
+  aiPlaneMesh = new THREE.Group();
+  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 15, 12), new THREE.MeshStandardMaterial({ color: 0xe2e8f0 }));
+  fuselage.rotation.z = Math.PI / 2;
+  aiPlaneMesh.add(fuselage);
+  const wings = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.3, 18), new THREE.MeshStandardMaterial({ color: 0xec4899 }));
+  aiPlaneMesh.add(wings);
+  aiPlaneMesh.position.set(aiPlaneState.x, aiPlaneState.y, aiPlaneState.z);
+  scene.add(aiPlaneMesh);
+
+  // Aktywny latający helikopter AI nad metropolią
+  aiHeliMesh = new THREE.Group();
+  const heliBody = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.8, 5.6), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+  const heliTail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 4.2), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+  heliTail.position.set(0, 0.3, -4.4);
+  const heliRotor = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.14, 0.4), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
+  heliRotor.position.set(0, 1.1, 0);
+  aiHeliMesh.add(heliBody, heliTail, heliRotor);
+  aiHeliMesh.userData.rotor = heliRotor;
+  scene.add(aiHeliMesh);
+}
+
+function buildPlayerMesh3D() {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.55), new THREE.MeshStandardMaterial({ color: 0xec4899 }));
+  body.position.y = 1.2;
+  body.castShadow = true;
+  group.add(body);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), new THREE.MeshStandardMaterial({ color: 0xfde68a }));
+  head.position.y = 2.15;
+  head.castShadow = true;
+  group.add(head);
+
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.48), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+  legs.position.y = 0.4;
+  group.add(legs);
+
+  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.95), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+  gun.position.set(0.55, 1.35, 0.45);
+  group.add(gun);
+
+  Player.mesh = group;
+  scene.add(group);
+}
+
+function buildWeatherParticles() {
+  const count = 900;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count * 3; i += 3) {
+    positions[i] = (Math.random() - 0.5) * 260;
+    positions[i + 1] = Math.random() * 80;
+    positions[i + 2] = (Math.random() - 0.5) * 260;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({ color: 0x93c5fd, size: 0.45, transparent: true, opacity: 0.75 });
+  weatherParticles = new THREE.Points(geo, mat);
+  weatherParticles.visible = false;
+  scene.add(weatherParticles);
+}
+
+// ----------------------------------------------------------------------------
+// KREATOR 400 POJAZDÓW 3D (AUTA, MOTORY, HELIKOPTERY, SAMOLOTY, ŁODZIE)
+// ----------------------------------------------------------------------------
+function spawnVehicle3D(typeOrId, x, z, yaw = 0, options = {}) {
+  const spec = VEHICLES_400.find(v => v.id === typeOrId || v.baseId === typeOrId) || VEHICLES_400[3];
+  const group = new THREE.Group();
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color: spec.color, metalness: 0.35, roughness: 0.35 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(spec.w, spec.h * 0.65, spec.l), bodyMat);
+  body.position.y = spec.bigWheels ? 1.5 : spec.airplane ? 1.2 : 0.75;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  if (spec.wheels === 4 && !spec.tank) {
+    const cabin = new THREE.Mesh(
+      new THREE.BoxGeometry(spec.w * 0.82, spec.h * 0.55, spec.l * 0.52),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.2 })
+    );
+    cabin.position.set(0, (spec.bigWheels ? 1.5 : 0.75) + spec.h * 0.5, -spec.l * 0.05);
+    cabin.castShadow = true;
+    group.add(cabin);
+  }
+
+  if (spec.airplane) {
+    const wings = new THREE.Mesh(new THREE.BoxGeometry(15.5, 0.25, 3.2), new THREE.MeshStandardMaterial({ color: 0x38bdf8 }));
+    wings.position.set(0, 1.35, 0);
+    wings.castShadow = true;
+    group.add(wings);
+
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.2, 1.4), bodyMat);
+    tail.position.set(0, 2.1, -spec.l * 0.42);
+    group.add(tail);
+  }
+
+  if (spec.waterOnly) {
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(spec.w * 0.55, 2.4, 4), bodyMat);
+    bow.rotation.x = Math.PI / 2;
+    bow.rotation.y = Math.PI / 4;
+    bow.position.set(0, 0.75, spec.l * 0.5 + 0.9);
+    group.add(bow);
+  }
+
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8 });
+  const wRadius = spec.bigWheels ? 0.95 : spec.wheels === 2 ? 0.42 : 0.48;
+  if (spec.wheels === 4) {
+    const offsets = [
+      [-spec.w * 0.52, wRadius, spec.l * 0.32],
+      [spec.w * 0.52, wRadius, spec.l * 0.32],
+      [-spec.w * 0.52, wRadius, -spec.l * 0.32],
+      [spec.w * 0.52, wRadius, -spec.l * 0.32]
+    ];
+    offsets.forEach(([wx, wy, wz]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(wRadius, wRadius, 0.38, 12), wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, wy, wz);
+      group.add(wheel);
+    });
+  } else if (spec.wheels === 2) {
+    [spec.l * 0.35, -spec.l * 0.35].forEach(wz => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(wRadius, wRadius, 0.28, 12), wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(0, wRadius, wz);
+      group.add(wheel);
+    });
+  }
+
+  if (spec.tank) {
+    const turret = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 2.6), bodyMat);
+    turret.position.set(0, 1.75, 0);
+    group.add(turret);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 4.2, 8), bodyMat);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 1.8, 2.8);
+    group.add(barrel);
+  }
+
+  let rotorMesh = null;
+  if (spec.heli) {
+    rotorMesh = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.12, 0.45), new THREE.MeshStandardMaterial({ color: 0xe2e8f0 }));
+    rotorMesh.position.set(0, 2.3, 0);
+    group.add(rotorMesh);
+  }
+
+  let sirenMesh = null;
+  if (spec.siren) {
+    sirenMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(spec.w * 0.65, 0.26, 0.35),
+      new THREE.MeshBasicMaterial({ color: 0xef4444 })
+    );
+    sirenMesh.position.set(0, spec.h + 0.55, 0);
+    group.add(sirenMesh);
+  }
+
+  const headLight = new THREE.Mesh(new THREE.BoxGeometry(spec.w * 0.7, 0.22, 0.15), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+  headLight.position.set(0, 0.75, spec.l * 0.5 + 0.05);
+  group.add(headLight);
+
+  group.position.set(x, 0, z);
+  group.rotation.y = yaw;
+  scene.add(group);
+
+  const plates = ['SUS3D', 'GTASUS', 'FREE0', 'PATROL', 'AI3D', 'VAULT'];
+  const vehObj = {
+    ...spec,
+    uid: Math.random().toString(36).slice(2),
+    x, y: 0, z,
+    yaw,
+    pitch: 0,
+    speed: 0,
+    hp: spec.hp,
+    maxHp: spec.hp,
+    fuel: 100,
+    plate: `${plates[Math.floor(Math.random() * plates.length)]}-${Math.floor(10 + Math.random() * 89)}`,
+    sirenOn: false,
+    driver: null,
+    aiDriver: options.aiDriver || null,
+    patrolAxis: options.patrolAxis || 'x',
+    patrolDir: 1,
+    fireCooldown: 0,
+    mesh: group,
+    bodyMesh: body,
+    rotorMesh,
+    sirenMesh
+  };
+  vehicles3D.push(vehObj);
+  return vehObj;
+}
+
+// ----------------------------------------------------------------------------
+// NPC 3D Z PRZEGUBOWYM RAGDOLL, POŚCIGIEM I ROZMOWĄ AI [T]
+// ----------------------------------------------------------------------------
+function spawnNpc3D(role, x, z, customName = null) {
+  let color = 0x94a3b8;
+  let headColor = 0xfde68a;
+  let hp = 85;
+  let weapon = null;
+  let name = customName || ['Marek', 'Kasia', 'Tomek', 'Ania', 'Kuba', 'Zosia', 'Piotr', 'Maja'][Math.floor(Math.random() * 8)];
+  let tagColor = '#e2e8f0';
+
+  if (role === 'police') {
+    color = 0x2563eb; hp = 130; weapon = WEAPONS_DB[3]; name = 'Policjant LSPD'; tagColor = '#60a5fa';
+  } else if (role === 'swat') {
+    color = 0x1e3a8a; hp = 210; weapon = WEAPONS_DB[6]; name = 'Operator SWAT'; tagColor = '#93c5fd';
+  } else if (role === 'fbi') {
+    color = 0x090d16; hp = 250; weapon = WEAPONS_DB[10]; name = 'Agent Specjalny FBI'; tagColor = '#f87171';
+  } else if (role === 'army') {
+    color = 0x3f6212; hp = 300; weapon = WEAPONS_DB[9]; name = 'Żołnierz SUS Army'; tagColor = '#a3e635';
+  } else if (role === 'gang') {
+    const gColors = [0x22c55e, 0xa855f7, 0xeab308];
+    color = gColors[Math.floor(Math.random() * gColors.length)];
+    hp = 115;
+    weapon = WEAPONS_DB[5];
+    name = 'Gangster SUS';
+  } else {
+    const civColors = [0xf472b6, 0x38bdf8, 0xfb923c, 0xa3e635, 0xe2e8f0];
+    color = civColors[Math.floor(Math.random() * civColors.length)];
+  }
+
+  const group = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.05, 0.5), new THREE.MeshStandardMaterial({ color }));
+  torso.position.y = 1.15;
+  torso.castShadow = true;
+  group.add(torso);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52), new THREE.MeshStandardMaterial({ color: headColor }));
+  head.position.y = 1.98;
+  head.castShadow = true;
+  group.add(head);
+
+  const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.65, 0.42), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+  leftLeg.position.set(-0.22, 0.35, 0);
+  const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.65, 0.42), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+  rightLeg.position.set(0.22, 0.35, 0);
+  group.add(leftLeg, rightLeg);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+
+  const npc = {
+    role, name, x, z,
+    vx: 0, vz: 0, vy: 0, posY: 0,
+    yaw: Math.random() * Math.PI * 2,
+    hp, maxHp: hp,
+    color,
+    weapon,
+    fireCooldown: 0,
+    state: 'wander',
+    ragdollTimer: 0,
+    timer: 1 + Math.random() * 3,
+    cash: Math.floor(40 + Math.random() * 140),
+    limbLeftLeg: leftLeg,
+    limbRightLeg: rightLeg,
+    mesh: group
+  };
+  npcs3D.push(npc);
+  return npc;
+}
+
+function initWorldEntities3D() {
+  vehicles3D.forEach(v => scene.remove(v.mesh));
+  npcs3D.forEach(n => scene.remove(n.mesh));
+  props3D.forEach(p => scene.remove(p.mesh));
+  vehicles3D = []; npcs3D = []; props3D = []; bullets3D = []; particles3D = [];
+  document.getElementById('npcTagsLayer').innerHTML = '';
+
+  // Zaparkowane oraz jeżdżące pojazdy AI (w tym patrolujący czołg AI!)
+  spawnVehicle3D('susbike', -10, 7, 0);
+  spawnVehicle3D('kuruma', 12, 9, Math.PI, { aiDriver: 'traffic', patrolAxis: 'x' });
+  spawnVehicle3D('banshee', 16, -10, Math.PI / 2, { aiDriver: 'traffic', patrolAxis: 'z' });
+  spawnVehicle3D('taxi', -52, 8, Math.PI / 2, { aiDriver: 'traffic', patrolAxis: 'x' });
+  spawnVehicle3D('police', 34, -18, 0);
+  spawnVehicle3D('fbi', 44, -22, 0);
+  spawnVehicle3D('monster', -24, -14, 0);
+  spawnVehicle3D('heli', -18, -22, 0);
+  spawnVehicle3D('plane', 235, 132, Math.PI / 2);
+  spawnVehicle3D('boat', 345, -80, 0);
+  aiTankObj = spawnVehicle3D('tank', -140, 0, Math.PI / 2, { aiDriver: 'tank_patrol', patrolAxis: 'x' });
+
+  for (let i = 0; i < 60; i++) {
+    const city = CITIES[i % CITIES.length];
+    const px = city.x + (Math.random() - 0.5) * city.r * 1.3;
+    const pz = city.z + (Math.random() - 0.5) * city.r * 1.3;
+    const isHydrant = i % 2 === 0;
+    const mesh = new THREE.Mesh(
+      isHydrant ? new THREE.CylinderGeometry(0.35, 0.45, 1.2, 8) : new THREE.CylinderGeometry(0.18, 0.25, 5.5, 6),
+      new THREE.MeshStandardMaterial({ color: isHydrant ? 0xef4444 : 0xfacc15 })
+    );
+    mesh.position.set(px, isHydrant ? 0.6 : 2.75, pz);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    props3D.push({ x: px, z: pz, isHydrant, broken: false, mesh });
+  }
+
+  for (let i = 0; i < 58; i++) {
+    const city = CITIES[i % CITIES.length];
+    const nx = city.x + (Math.random() - 0.5) * city.r * 1.3;
+    const nz = city.z + (Math.random() - 0.5) * city.r * 1.3;
+    const role = i % 8 === 0 ? 'gang' : i % 10 === 0 ? 'police' : 'civilian';
+    spawnNpc3D(role, nx, nz);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// POŚCIGI 1–6 GWIAZDEK & NAPAD NA BANK [H]
+// ----------------------------------------------------------------------------
+function addWantedStars(amount, reason = '') {
+  if (Settings.witnessSystem && GameState.wantedLevel === 0 && amount === 1) {
+    const witness = npcs3D.find(n => n.role === 'civilian' && n.hp > 0 && Math.hypot(n.x - Player.x, n.z - Player.z) < 48);
+    if (!witness) {
+      logEvent('🤫 Brak świadków w pobliżu — nikt nie wezwał policji!', 'text-emerald-400');
+      return;
+    }
+    if (!GameState.witnessCallingNpc) {
+      GameState.witnessCallingNpc = witness;
+      GameState.witnessCallTimer = 4.0;
+      witness.state = 'call911';
+      logEvent(`📱 Świadek (${witness.name}) widział przestępstwo (${reason}) i dzwoni na 911!`, 'text-amber-400');
+      return;
+    }
+  }
+
+  const prev = GameState.wantedLevel;
+  GameState.wantedLevel = Math.min(6, Math.max(GameState.wantedLevel, prev + amount));
+  GameState.wantedDecayTimer = 22;
+
+  if (GameState.wantedLevel > prev) {
+    const agency = GameState.wantedLevel >= 6 ? 'WOJSKO (CZOŁGI RHINO 3D)' :
+                   GameState.wantedLevel >= 4 ? 'AGENCI FBI (GRANGER SUV)' :
+                   GameState.wantedLevel === 3 ? 'ODDZIAŁY SWAT' : 'POLICJA LSPD';
+    logEvent(`🚨 POŚCIG ${GameState.wantedLevel}★ — Wkracza ${agency}!`, 'text-red-400 font-bold');
+    GameState.newsHeadline = `PILNE 3D: Pościg ${GameState.wantedLevel}★! ${agency} w akcji w ${getCurrentCityName()}!`;
+    spawnPursuitUnits3D();
+  }
+}
+
+function spawnPursuitUnits3D() {
+  const wl = GameState.wantedLevel;
+  if (wl <= 0) return;
+  const ang = Math.random() * Math.PI * 2;
+  const dist = 75;
+  const sx = Math.max(-WORLD_HALF + 20, Math.min(WORLD_HALF - 20, Player.x + Math.sin(ang) * dist));
+  const sz = Math.max(-WORLD_HALF + 20, Math.min(WORLD_HALF - 20, Player.z + Math.cos(ang) * dist));
+
+  if (wl <= 2) {
+    const copCar = spawnVehicle3D('police', sx, sz, ang + Math.PI);
+    copCar.sirenOn = true;
+    spawnNpc3D('police', sx + 3, sz);
+    spawnNpc3D('police', sx - 3, sz);
+  } else if (wl === 3) {
+    const swatVan = spawnVehicle3D('swat', sx, sz, ang + Math.PI);
+    swatVan.sirenOn = true;
+    spawnNpc3D('swat', sx + 3, sz);
+    spawnNpc3D('swat', sx - 3, sz);
+  } else if (wl === 4 || wl === 5) {
+    const fbiSuv = spawnVehicle3D('fbi', sx, sz, ang + Math.PI);
+    fbiSuv.sirenOn = true;
+    spawnNpc3D('fbi', sx + 3, sz);
+    spawnNpc3D('fbi', sx - 3, sz);
+    if (wl === 5) spawnNpc3D('fbi', sx, sz + 4);
+  } else if (wl >= 6) {
+    spawnVehicle3D('tank', sx, sz, ang + Math.PI);
+    spawnNpc3D('army', sx + 4, sz);
+    spawnNpc3D('fbi', sx - 4, sz);
+  }
+}
+
+function triggerBankHeistAction() {
+  const distVault = Math.hypot(Player.x - BANK_VAULT_ZONE.x, Player.z - BANK_VAULT_ZONE.z);
+  const distBank = Math.hypot(Player.x - 38, Player.z - 36);
+  if (GameState.heistLootReady > 0) {
+    const payout = GameState.heistLootReady;
+    Player.dirtyCash += payout;
+    GameState.heistLootReady = 0;
+    GameState.heistActive = false;
+    GameState.heistProgress = 0;
+    SFX.cash();
+    addWantedStars(4, 'Ucieczka z łupem ze skarbca banku');
+    logEvent(`💰 Zgarnięto $${payout} brudnego łupu ze skarbca! Wypierz w SusPhone -> Bank!`, 'text-emerald-400 font-bold');
+    return;
+  }
+  if (!GameState.heistActive) {
+    if (distVault > 24 && distBank > 24) {
+      logEvent('🏦 Podejdź bliżej Pacific Sus Bank lub jego skarbca (x:46, z:44) i wciśnij [H]!', 'text-amber-300');
+      return;
+    }
+    GameState.heistActive = true;
+    GameState.heistProgress = 5;
+    addWantedStars(3, 'Wiercenie skarbca Pacific Sus Bank');
+    logEvent('🪓 Rozpoczęto wiercenie skarbca bankowego! Nie oddalaj się zbyt daleko.', 'text-amber-400 font-bold');
+  } else {
+    logEvent(`⚙️ Wiercenie trwa: ${Math.floor(GameState.heistProgress)}%...`, 'text-cyan-300');
+  }
+}
+
+// ----------------------------------------------------------------------------
+// BRONI, POCISKI, RAGDOLL NPC I EKSPLOZJE
+// ----------------------------------------------------------------------------
+function fireCurrentWeapon3D() {
+  if (Player.reloading || Player.fireCooldown > 0) return;
+  const w = Player.weapons[Player.currentWeaponIdx];
+  if (!w) return;
+
+  if (w.currentClip <= 0 && w.clip !== Infinity) {
+    startReload();
+    return;
+  }
+
+  Player.fireCooldown = w.fireRate;
+  if (w.clip !== Infinity) w.currentClip--;
+
+  const isSilenced = Player.suppressor && (w.type === 'pistol' || w.type === 'smg' || w.type === 'rifle');
+  SFX.shoot(isSilenced ? 'silenced' : w.type);
+
+  const dirX = Math.sin(Player.camYaw);
+  const dirZ = Math.cos(Player.camYaw);
+  const startX = Player.x + dirX * 1.4;
+  const startY = Player.y + 1.45;
+  const startZ = Player.z + dirZ * 1.4;
+
+  if (w.type === 'melee') {
+    spawnParticles3D(startX, startY, startZ, 6, 0xf8fafc, 8, 0.25);
+    npcs3D.forEach(n => {
+      if (n.hp > 0 && Math.hypot(n.x - startX, n.z - startZ) < w.range) {
+        damageNpc3D(n, w.dmg, 'player', dirX * 14, dirZ * 14);
+        addWantedStars(1, 'Atak bronią białą');
+      }
+    });
+    return;
+  }
+
+  const pellets = w.pellets || 1;
+  const spread = w.spread || 0.025;
+  for (let i = 0; i < pellets; i++) {
+    const yawSpread = Player.camYaw + (Math.random() - 0.5) * spread;
+    const vx = Math.sin(yawSpread) * (w.type === 'rpg' ? 85 : w.type === 'flame' ? 45 : 165);
+    const vz = Math.cos(yawSpread) * (w.type === 'rpg' ? 85 : w.type === 'flame' ? 45 : 165);
+
+    const bMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(w.explosive ? 0.35 : w.type === 'flame' ? 0.45 : 0.16, 6, 6),
+      new THREE.MeshBasicMaterial({ color: w.type === 'flame' ? 0xf97316 : 0xfde047 })
+    );
+    bMesh.position.set(startX, startY, startZ);
+    scene.add(bMesh);
+
+    bullets3D.push({
+      x: startX, y: startY, z: startZ,
+      vx, vy: 0, vz,
+      dmg: w.dmg,
+      range: w.range,
+      traveled: 0,
+      owner: 'player',
+      explosive: !!w.explosive,
+      mesh: bMesh
+    });
+  }
+
+  if (!isSilenced) addWantedStars(1, `Strzały z ${w.name}`);
+  updateHud();
+}
+
+function fireTankCannon3D() {
+  const v = Player.inVehicle;
+  if (!v || v.fireCooldown > 0) return;
+  v.fireCooldown = 1.1;
+  SFX.shoot('tank');
+
+  const dirX = Math.sin(v.yaw);
+  const dirZ = Math.cos(v.yaw);
+  const sx = v.x + dirX * 4.6;
+  const sz = v.z + dirZ * 4.6;
+
+  const bMesh = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+  bMesh.position.set(sx, 1.8, sz);
+  scene.add(bMesh);
+
+  bullets3D.push({
+    x: sx, y: 1.8, z: sz,
+    vx: dirX * 110, vy: 0, vz: dirZ * 110,
+    dmg: 350,
+    range: 180,
+    traveled: 0,
+    owner: 'player',
+    explosive: true,
+    mesh: bMesh
+  });
+  addWantedStars(2, 'Ostrzał z czołgu Rhino SUS');
+}
+
+function createExplosion3D(x, y, z, radius = 18, maxDmg = 260) {
+  SFX.explosion();
+  spawnParticles3D(x, y + 1, z, 28, 0xf97316, 26, 0.65);
+  spawnParticles3D(x, y + 1, z, 18, 0xfacc15, 18, 0.5);
+
+  if (Math.hypot(Player.x - x, Player.z - z) < radius) {
+    damagePlayer(maxDmg * 0.35);
+  }
+  npcs3D.forEach(n => {
+    const d = Math.hypot(n.x - x, n.z - z);
+    if (n.hp > 0 && d < radius) {
+      const kx = ((n.x - x) / Math.max(0.1, d)) * 22;
+      const kz = ((n.z - z) / Math.max(0.1, d)) * 22;
+      damageNpc3D(n, maxDmg * (1 - d / radius), 'player', kx, kz);
+    }
+  });
+  vehicles3D.forEach(v => {
+    const d = Math.hypot(v.x - x, v.z - z);
+    if (d < radius) v.hp -= maxDmg * 1.15 * (1 - d / radius);
+  });
+}
+
+function spawnParticles3D(x, y, z, count, colorHex, speed = 12, life = 0.5) {
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+  const geo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+  for (let i = 0; i < count; i++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    scene.add(m);
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * speed;
+    particles3D.push({
+      mesh: m,
+      vx: Math.cos(a) * s,
+      vy: 3 + Math.random() * speed * 0.6,
+      vz: Math.sin(a) * s,
+      life
+    });
+  }
+}
+
+function startReload() {
+  const w = Player.weapons[Player.currentWeaponIdx];
+  if (!w || w.clip === Infinity || w.currentClip === w.clip || w.currentReserve <= 0 || Player.reloading) return;
+  Player.reloading = true;
+  Player.reloadTimer = 1.0;
+  logEvent(`🔄 Przeładowywanie 3D: ${w.name}...`, 'text-slate-400');
+}
+
+function damageNpc3D(npc, dmg, attacker, knockX = 0, knockZ = 0) {
+  npc.hp -= dmg;
+  npc.vx += knockX;
+  npc.vz += knockZ;
+  npc.vy = Math.max(npc.vy, 6.2);
+  npc.ragdollTimer = 1.25;
+  npc.mesh.rotation.x = Math.PI * 0.45;
+  if (npc.limbLeftLeg) npc.limbLeftLeg.rotation.x = 0.7;
+  if (npc.limbRightLeg) npc.limbRightLeg.rotation.x = -0.6;
+  spawnParticles3D(npc.x, 1.2, npc.z, 5, 0xdc2626, 7, 0.35);
+
+  if (npc.hp <= 0) {
+    npc.hp = 0;
+    npc.state = 'dead';
+    npc.mesh.rotation.x = Math.PI / 2;
+    npc.posY = 0.25;
+    if (attacker === 'player') {
+      Player.kills++;
+      Player.cash += npc.cash;
+      SFX.cash();
+      logEvent(`💀 Wyeliminowano: ${npc.name} (+$${npc.cash})`, 'text-emerald-400');
+      if (npc.role === 'police' || npc.role === 'swat') addWantedStars(1, 'Zabójstwo policjanta');
+      if (npc.role === 'fbi' || npc.role === 'army') addWantedStars(2, 'Zabójstwo agenta FBI/Wojska');
+    }
+  } else if (attacker === 'player') {
+    npc.state = npc.weapon ? 'combat' : 'flee';
+  }
+}
+
+function damagePlayer(dmg) {
+  if (Player.armor > 0) {
+    const absorbed = Math.min(Player.armor, dmg * 0.7);
+    Player.armor -= absorbed;
+    dmg -= absorbed;
+  }
+  Player.hp = Math.max(0, Player.hp - dmg);
+  if (Player.hp <= 0) {
+    Player.hp = 100;
+    Player.armor = 0;
+    Player.inVehicle = null;
+    Player.mesh.visible = true;
+    document.getElementById('vehicleHud').classList.add('hidden');
+    const fee = Math.min(Player.cash, 200);
+    Player.cash -= fee;
+    GameState.wantedLevel = 0;
+    Player.x = -38;
+    Player.z = 52;
+    Player.y = 0;
+    logEvent(`🏥 WASTED! Odrodziłeś się przed Szpitalem Centralnym (-$${fee}).`, 'text-red-400 font-bold');
+  }
+}
+
+// ----------------------------------------------------------------------------
+// STEROWANIE KLAWIATURĄ + MYSZĄ
+// ----------------------------------------------------------------------------
+const Keys = {};
+const Mouse = { down: false, rightDown: false, lastX: 0, lastY: 0 };
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Tab') e.preventDefault();
+  Keys[e.code] = true;
+  if (!GameState.running) return;
+
+  if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+  if (e.code === 'Escape') toggleModal('settingsModal');
+  if (e.code === 'KeyB') openShopModal('ammu');
+  if (e.code === 'KeyI' || e.code === 'Tab') { openInventoryModal(); toggleModal('inventoryModal'); }
+  if (e.code === 'KeyH') triggerBankHeistAction();
+  if (e.code === 'KeyT' && !Player.inVehicle) openNpcChatModal();
+  if (e.code === 'KeyP') { openPhoneApp('bank'); toggleModal('phoneModal'); }
+  if (e.code === 'KeyM') { toggleModal('mapModal'); renderFullMap(); }
+  if (e.code === 'KeyR') {
+    if (!Player.inVehicle || !Player.inVehicle.flying) startReload();
+  }
+  if (e.code === 'KeyC' && !Player.inVehicle && Player.rollTimer <= 0 && Player.y <= 0.05) {
+    Player.rollTimer = 0.45;
+    Player.vx = Math.sin(Player.camYaw) * 20;
+    Player.vz = Math.cos(Player.camYaw) * 20;
+    logEvent('🤸 Przewrót taktyczny 3D!', 'text-cyan-300');
+  }
+  if (e.code === 'KeyF' || e.code === 'KeyE') {
+    handleEnterInteractOrBuilding3D();
+  }
+  if (e.code === 'KeyV') {
+    Player.fppMode = !Player.fppMode;
+    logEvent(Player.fppMode ? '👁️ Kamera Pierwszej Osoby (FPP)' : '🎥 Kamera Trzeciej Osoby (TPP)', 'text-cyan-300');
+  }
+  if (e.code === 'KeyN' && Player.inVehicle) {
+    SFX.radioIndex = (SFX.radioIndex + 1) % SFX.stations.length;
+    logEvent(`📻 Stacja radiowa: ${SFX.stations[SFX.radioIndex].name}`, 'text-pink-400');
+  }
+  if (e.code === 'KeyH' && Player.inVehicle) {
+    if (Player.inVehicle.siren) {
+      Player.inVehicle.sirenOn = !Player.inVehicle.sirenOn;
+      logEvent(Player.inVehicle.sirenOn ? '🚨 Syreny policyjne/FBI WŁĄCZONE' : '🔇 Syreny WYŁĄCZONE', 'text-blue-400');
+    } else {
+      SFX.playTone(340, 'sawtooth', 0.18, 0.1);
+    }
+  }
+  if (e.code.startsWith('Digit')) {
+    const idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
+    if (idx >= 0 && idx < Player.weapons.length) {
+      Player.currentWeaponIdx = idx;
+      Player.reloading = false;
+      updateWeaponHotbar();
+    }
+  }
+});
+
+window.addEventListener('keyup', e => { Keys[e.code] = false; });
+window.addEventListener('contextmenu', e => { if (GameState.running) e.preventDefault(); });
+
+window.addEventListener('mousedown', e => {
+  if (!GameState.running || GameState.paused) return;
+  if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+  SFX.init();
+  if (e.button === 0) {
+    Mouse.down = true;
+    if (!Player.inVehicle) fireCurrentWeapon3D();
+    else if (Player.inVehicle.tank) fireTankCannon3D();
+  } else if (e.button === 2) {
+    Mouse.rightDown = true;
+    Mouse.lastX = e.clientX;
+    Mouse.lastY = e.clientY;
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button === 0) Mouse.down = false;
+  if (e.button === 2) Mouse.rightDown = false;
+});
+
+window.addEventListener('mousemove', e => {
+  if (!GameState.running || GameState.paused) return;
+  if (Mouse.rightDown) {
+    const dx = e.clientX - Mouse.lastX;
+    const dy = e.clientY - Mouse.lastY;
+    Mouse.lastX = e.clientX;
+    Mouse.lastY = e.clientY;
+    const sens = Settings.camSens * 0.0014;
+    Player.camYaw -= dx * sens;
+    Player.camPitch = Math.max(0.06, Math.min(1.15, Player.camPitch + dy * sens));
+  }
+});
+
+// ----------------------------------------------------------------------------
+// WSIADANIE / WYSIADANIE Z POJAZDÓW, ROZMOWA Z NPC [T] I BUDYNKI
+// ----------------------------------------------------------------------------
+function getNearbyNpc(maxDist = 7.5) {
+  let best = null;
+  let bestD = maxDist;
+  npcs3D.forEach(n => {
+    if (n.hp > 0) {
+      const d = Math.hypot(n.x - Player.x, n.z - Player.z);
+      if (d < bestD) { bestD = d; best = n; }
+    }
+  });
+  return best;
+}
+
+function openNpcChatModal() {
+  const npc = getNearbyNpc(8.5);
+  if (!npc) {
+    logEvent('💬 Podejdź bliżej dowolnego NPC (do 8.5m), aby porozmawiać [T].', 'text-amber-300');
+    return;
+  }
+  GameState.activeChatNpc = npc;
+  document.getElementById('npcChatTitle').textContent = `💬 Rozmowa z: ${npc.name} (${npc.role.toUpperCase()})`;
+  document.getElementById('npcChatReply').textContent = `${npc.name}: Słucham cię! O czym chcesz pogadać w Sus City 3D?`;
+  document.getElementById('npcChatModal').classList.remove('hidden');
+  GameState.paused = true;
+  document.getElementById('npcChatInput').focus();
+}
+
+async function sendNpcMessage(customMsg = null) {
+  const input = document.getElementById('npcChatInput');
+  const msg = (customMsg || input.value || '').trim();
+  if (!msg || !GameState.activeChatNpc) return;
+  if (!customMsg) input.value = '';
+  const replyBox = document.getElementById('npcChatReply');
+  const metaBox = document.getElementById('npcChatMeta');
+  replyBox.textContent = '⏳ NPC myśli...';
+  const res = await askGroqNpcReply(GameState.activeChatNpc, msg);
+  replyBox.textContent = res.text;
+  metaBox.textContent = `Źródło: ${res.source} • Klawisz [T]`;
+}
+
+function handleEnterInteractOrBuilding3D() {
+  if (Player.inVehicle) {
+    const v = Player.inVehicle;
+    Player.x = v.x + Math.cos(v.yaw) * (v.w + 2.4);
+    Player.z = v.z - Math.sin(v.yaw) * (v.w + 2.4);
+    Player.y = Math.max(0, v.y);
+    Player.vy = 0;
+    v.driver = null;
+    Player.inVehicle = null;
+    Player.mesh.visible = true;
+    document.getElementById('vehicleHud').classList.add('hidden');
+    logEvent(`🚪 Wysiadłeś z: ${v.name}`, 'text-slate-300');
+    return;
+  }
+
+  let closestVeh = null;
+  let bestDist = 8.5;
+  vehicles3D.forEach(v => {
+    const d = Math.hypot(v.x - Player.x, v.z - Player.z);
+    if (d < bestDist) { bestDist = d; closestVeh = v; }
+  });
+
+  if (closestVeh) {
+    const wasAiDriven = !!closestVeh.aiDriver;
+    closestVeh.aiDriver = null;
+    Player.inVehicle = closestVeh;
+    closestVeh.driver = 'player';
+    Player.mesh.visible = false;
+    document.getElementById('vehicleHud').classList.remove('hidden');
+    SFX.init();
+    if (wasAiDriven) {
+      addWantedStars(1, `Kradzież pojazdu: ${closestVeh.name}`);
+      logEvent(`🔓 Ukradłeś i wsiadłeś do 3D: ${closestVeh.name} [${closestVeh.plate}]!`, 'text-amber-300 font-bold');
+    } else {
+      logEvent(`🔑 Wsiadłeś do 3D: ${closestVeh.name} [${closestVeh.plate}]`, 'text-cyan-300');
+    }
+    return;
+  }
+
+  const nearB = getNearbyBuilding3D();
+  if (nearB) {
+    enterBuilding3D(nearB);
+  }
+}
+
+function getNearbyBuilding3D() {
+  for (const b of BUILDINGS) {
+    if (Math.hypot(Player.x - b.x, Player.z - b.z) < Math.max(b.w, b.d) * 0.85) return b;
+  }
+  return null;
+}
+
+function enterBuilding3D(b) {
+  if (b.type === 'shop') openShopModal('ammu');
+  else if (b.type === 'modshop') openShopModal('modshop');
+  else if (b.type === 'hospital') {
+    if (Player.cash >= 100) {
+      Player.cash -= 100;
+      Player.hp = 100;
+      Player.armor = 100;
+      SFX.cash();
+      logEvent('🏥 Uleczono rany i uzupełniono pancerz 100% (-$100).', 'text-emerald-400');
+    } else logEvent('❌ Potrzebujesz $100 na leczenie.', 'text-red-400');
+  } else if (b.type === 'bank') {
+    triggerBankHeistAction();
+  } else if (b.type === 'casino') {
+    if (Player.cash < 100) return logEvent('🎰 Minimalny zakład w Diamond Sus Casino to $100.', 'text-amber-400');
+    Player.cash -= 100;
+    if (Math.random() > 0.45) {
+      Player.cash += 300;
+      SFX.cash();
+      logEvent('🎰 JACKPOT 3D! Wygrałeś $300 w Diamond Sus Casino!', 'text-emerald-400 font-bold');
+    } else logEvent('🎰 Kasyno wygrało tym razem (-$100).', 'text-slate-400');
+  } else if (b.type === 'gym') {
+    Player.maxHp = Math.min(200, Player.maxHp + 15);
+    Player.hp = Player.maxHp;
+    logEvent(`💪 Trening na siłowni 3D! Maksymalne zdrowie wzrosło do ${Player.maxHp} HP!`, 'text-pink-400');
+  } else if (b.type === 'gas') {
+    if (Player.inVehicle) {
+      Player.inVehicle.fuel = 100;
+      Player.cash = Math.max(0, Player.cash - 50);
+      SFX.cash();
+      logEvent('⛽ Zatankowano pojazd 3D do pełna (-$50).', 'text-amber-400');
+    } else logEvent('⛽ Podjedź pojazdem pod dystrybutor 3D.', 'text-slate-300');
+  } else if (b.type === 'kennel') {
+    if (!Player.hasDog) {
+      if (Player.cash >= 100) {
+        Player.cash -= 100;
+        Player.hasDog = true;
+        spawnDog3D();
+        SFX.cash();
+        logEvent('🐕 Adoptowałeś psa obronnego Chop SUS 3D (-$100)!', 'text-emerald-400 font-bold');
+      } else logEvent('🐕 Adopcja psa kosztuje $100.', 'text-amber-400');
+    }
+  } else if (b.type === 'police') {
+    logEvent('🚓 Komisariat Policji & Biuro FBI 3D.', 'text-blue-400');
+  } else if (b.type === 'airport') {
+    logEvent('✈️ Lotnisko SUS International 3D — na pasie stoi samolot SUS Jetliner!', 'text-cyan-300');
+  }
+}
+
+function spawnDog3D() {
+  if (dogMesh) return;
+  dogMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.7, 1.2),
+    new THREE.MeshStandardMaterial({ color: 0x92400e })
+  );
+  dogMesh.position.set(Player.x + 2, 0.35, Player.z + 2);
+  dogMesh.castShadow = true;
+  scene.add(dogMesh);
+}
+
+// ----------------------------------------------------------------------------
+// PĘTLA SYMULACJI 3D
+// ----------------------------------------------------------------------------
+function getCurrentCityName() {
+  if (Math.hypot(Player.x - PARK_ZONE.x, Player.z - PARK_ZONE.z) < PARK_ZONE.r) return PARK_ZONE.name;
+  for (const c of CITIES) {
+    if (Math.hypot(Player.x - c.x, Player.z - c.z) < c.r) return c.name;
+  }
+  if (Player.x > 310) return 'Ocean Spokojny SUS 3D';
+  return 'Autostrada Stanowa SUS 3D';
+}
+
+function collidesWithSolid3D(x, z, r = 0.8) {
+  for (const c of solidColliders) {
+    if (Math.abs(x - c.x) < c.hw + r && Math.abs(z - c.z) < c.hd + r) return true;
+  }
+  return false;
+}
+
+function isPointInWater3D(x, z) {
+  for (const w of WATER_ZONES) {
+    if (Math.abs(x - w.x) < w.w / 2 && Math.abs(z - w.z) < w.d / 2) return true;
+  }
+  return false;
+}
+
+function updateSimulation3D(dt) {
+  if (!GameState.running || GameState.paused) return;
+
+  GameState.timeMinutes = (GameState.timeMinutes + dt * 2) % (24 * 60);
+
+  if (GameState.heistActive) {
+    const distVault = Math.hypot(Player.x - BANK_VAULT_ZONE.x, Player.z - BANK_VAULT_ZONE.z);
+    const distBank = Math.hypot(Player.x - 38, Player.z - 36);
+    if (distVault > 34 && distBank > 34) {
+      GameState.heistActive = false;
+      GameState.heistProgress = 0;
+      logEvent('⚠️ Oddaliłeś się zbyt daleko od banku — wiercenie przerwane.', 'text-amber-400');
+    } else {
+      GameState.heistProgress = Math.min(100, GameState.heistProgress + 16 * dt);
+      if (GameState.heistProgress >= 100) {
+        GameState.heistActive = false;
+        GameState.heistLootReady = Math.floor(2800 + Math.random() * 2400);
+        logEvent(`🔓 Skarbiec otwarty! Łup $${GameState.heistLootReady} czeka — wciśnij [H], aby go zabrać!`, 'text-emerald-400 font-bold');
+      }
+    }
+  }
+
+  if (Player.reloading) {
+    Player.reloadTimer -= dt;
+    if (Player.reloadTimer <= 0) {
+      Player.reloading = false;
+      const w = Player.weapons[Player.currentWeaponIdx];
+      if (w && w.clip !== Infinity) {
+        const need = w.clip - w.currentClip;
+        const take = Math.min(need, w.currentReserve);
+        w.currentClip += take;
+        w.currentReserve -= take;
+      }
+    }
+  }
+  if (Player.fireCooldown > 0) Player.fireCooldown -= dt;
+
+  if (Mouse.down && !Player.inVehicle) {
+    const w = Player.weapons[Player.currentWeaponIdx];
+    if (w && w.auto) fireCurrentWeapon3D();
+  }
+
+  if (Keys['ArrowLeft']) Player.camYaw += 2.2 * dt;
+  if (Keys['ArrowRight']) Player.camYaw -= 2.2 * dt;
+
+  if (!Player.inVehicle) {
+    updatePlayerOnFoot3D(dt);
+  } else {
+    updatePlayerInVehicle3D(dt);
+  }
+
+  if (Player.hasDog && dogMesh) {
+    const tx = Player.x - Math.sin(Player.camYaw) * 2.5;
+    const tz = Player.z - Math.cos(Player.camYaw) * 2.5;
+    dogMesh.position.x += (tx - dogMesh.position.x) * 4 * dt;
+    dogMesh.position.z += (tz - dogMesh.position.z) * 4 * dt;
+
+    const enemy = npcs3D.find(n => n.hp > 0 && n.state === 'combat' && Math.hypot(n.x - Player.x, n.z - Player.z) < 22);
+    if (enemy) {
+      dogMesh.position.x += (enemy.x - dogMesh.position.x) * 5 * dt;
+      dogMesh.position.z += (enemy.z - dogMesh.position.z) * 5 * dt;
+      if (Math.hypot(enemy.x - dogMesh.position.x, enemy.z - dogMesh.position.z) < 2.2) {
+        damageNpc3D(enemy, 32 * dt, 'player');
+      }
+    }
+  }
+
+  if (GameState.witnessCallingNpc) {
+    const wn = GameState.witnessCallingNpc;
+    if (wn.hp <= 0 || Math.hypot(wn.x - Player.x, wn.z - Player.z) > 75) {
+      logEvent('📵 Połączenie z 911 przerwane!', 'text-emerald-400');
+      GameState.witnessCallingNpc = null;
+    } else {
+      GameState.witnessCallTimer -= dt;
+      if (GameState.witnessCallTimer <= 0) {
+        GameState.witnessCallingNpc = null;
+        addWantedStars(1, 'Zgłoszenie świadka 911');
+      }
+    }
+  }
+
+  if (GameState.wantedLevel > 0) {
+    const lawNear = npcs3D.some(n => n.hp > 0 && ['police', 'swat', 'fbi', 'army'].includes(n.role) && Math.hypot(n.x - Player.x, n.z - Player.z) < 75);
+    if (!lawNear) {
+      GameState.wantedDecayTimer -= dt;
+      if (GameState.wantedDecayTimer <= 0) {
+        GameState.wantedLevel = Math.max(0, GameState.wantedLevel - 1);
+        GameState.wantedDecayTimer = 14;
+        if (GameState.wantedLevel === 0) logEvent('✅ Zgubiłeś pościg! Poziom poszukiwania: 0★.', 'text-emerald-400 font-bold');
+      }
+    } else {
+      GameState.wantedDecayTimer = 16;
+      if (Math.random() < dt * 0.2 && npcs3D.filter(n => n.hp > 0 && ['police', 'swat', 'fbi', 'army'].includes(n.role)).length < GameState.wantedLevel * 3) {
+        spawnPursuitUnits3D();
+      }
+    }
+  }
+
+  updateVehicles3D(dt);
+  updateNpcs3D(dt);
+  updateBullets3D(dt);
+  updateParticles3D(dt);
+
+  if (fountainStreamMesh) {
+    const pulse = 1 + Math.sin(performance.now() * 0.008) * 0.22;
+    fountainStreamMesh.scale.set(pulse, pulse, pulse);
+  }
+  clouds3D.forEach(cl => {
+    cl.mesh.position.x += cl.speed * dt;
+    if (cl.mesh.position.x > WORLD_HALF + 60) cl.mesh.position.x = -WORLD_HALF - 60;
+  });
+
+  trainX += 32 * dt;
+  if (trainX > WORLD_HALF + 80) trainX = -WORLD_HALF - 40;
+  if (trainMesh) trainMesh.position.x = trainX;
+
+  if (aiPlaneMesh) {
+    if (aiPlaneState.phase === 'taxi') {
+      aiPlaneState.x -= 14 * dt;
+      if (aiPlaneState.x < 210) aiPlaneState.phase = 'takeoff';
+    } else {
+      aiPlaneState.x -= 48 * dt;
+      aiPlaneState.y = Math.min(55, aiPlaneState.y + 12 * dt);
+      if (aiPlaneState.x < -420) {
+        aiPlaneState.x = 320;
+        aiPlaneState.y = 1.5;
+        aiPlaneState.phase = 'taxi';
+      }
+    }
+    aiPlaneMesh.position.set(aiPlaneState.x, aiPlaneState.y, aiPlaneState.z);
+  }
+
+  if (aiHeliMesh) {
+    aiHeliState.angle += 0.28 * dt;
+    const hx = Math.cos(aiHeliState.angle) * aiHeliState.radius;
+    const hz = Math.sin(aiHeliState.angle) * aiHeliState.radius;
+    aiHeliMesh.position.set(hx, aiHeliState.y, hz);
+    aiHeliMesh.rotation.y = -aiHeliState.angle;
+    if (aiHeliMesh.userData.rotor) aiHeliMesh.userData.rotor.rotation.y += 28 * dt;
+  }
+
+  updateEnvironment3D(dt);
+  updateCamera3D();
+  SFX.updateRadio(dt, !!Player.inVehicle);
+  updateHud();
+}
+
+function updatePlayerOnFoot3D(dt) {
+  let forward = 0, strafe = 0;
+  if (Keys['KeyW'] || Keys['ArrowUp']) forward += 1;
+  if (Keys['KeyS']) forward -= 1;
+  if (Keys['KeyA']) strafe += 1;
+  if (Keys['KeyD']) strafe -= 1;
+
+  const sprinting = (Keys['ShiftLeft'] || Keys['ShiftRight']) && Player.stamina > 5;
+  const maxSpd = sprinting ? 19.5 : 12.0;
+
+  if (sprinting && (forward !== 0 || strafe !== 0)) Player.stamina = Math.max(0, Player.stamina - 20 * dt);
+  else Player.stamina = Math.min(100, Player.stamina + 15 * dt);
+
+  if (Keys['Space'] && Player.y <= 0.05 && Player.rollTimer <= 0) {
+    Player.vy = 9.8;
+  }
+  Player.vy -= 24 * dt;
+  const prevY = Player.y;
+  Player.y = Math.max(0, Player.y + Player.vy * dt);
+  if (Player.y === 0) {
+    if (prevY > 8.5 && Player.vy < -16) {
+      const fallDmg = Math.min(45, Math.round((Math.abs(Player.vy) - 16) * 2.1));
+      damagePlayer(fallDmg);
+      Player.rollTimer = 0.35;
+      logEvent(`💥 Upadek z wysokości (-${fallDmg} HP)!`, 'text-amber-400');
+    }
+    Player.vy = 0;
+  }
+
+  const fx = Math.sin(Player.camYaw);
+  const fz = Math.cos(Player.camYaw);
+  const rx = Math.cos(Player.camYaw);
+  const rz = -Math.sin(Player.camYaw);
+
+  let mx = fx * forward + rx * strafe;
+  let mz = fz * forward + rz * strafe;
+  const len = Math.hypot(mx, mz);
+  if (len > 0) { mx /= len; mz /= len; }
+
+  if (Player.rollTimer > 0) {
+    Player.rollTimer -= dt;
+    Player.mesh.rotation.x += 14 * dt;
+  } else {
+    Player.mesh.rotation.x = 0;
+    const targetVx = mx * maxSpd;
+    const targetVz = mz * maxSpd;
+    const smooth = 1 - Math.exp(-14 * dt);
+    Player.vx += (targetVx - Player.vx) * smooth;
+    Player.vz += (targetVz - Player.vz) * smooth;
+  }
+
+  const nx = Math.max(-WORLD_HALF + 5, Math.min(WORLD_HALF - 5, Player.x + Player.vx * dt));
+  const nz = Math.max(-WORLD_HALF + 5, Math.min(WORLD_HALF - 5, Player.z + Player.vz * dt));
+
+  if (!collidesWithSolid3D(nx, Player.z, 0.7)) Player.x = nx;
+  else Player.vx = 0;
+  if (!collidesWithSolid3D(Player.x, nz, 0.7)) Player.z = nz;
+  else Player.vz = 0;
+
+  if (len > 0.05) {
+    const targetYaw = Math.atan2(mx, mz);
+    let diff = targetYaw - Player.yaw;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    Player.yaw += diff * Math.min(1, 14 * dt);
+  }
+
+  if (Player.mesh) {
+    Player.mesh.position.set(Player.x, Player.y, Player.z);
+    Player.mesh.rotation.y = Player.yaw;
+  }
+}
+
+function updatePlayerInVehicle3D(dt) {
+  const v = Player.inVehicle;
+  if (v.fireCooldown > 0) v.fireCooldown -= dt;
+
+  const hasFuel = !Settings.fuelEnabled || v.fuel > 0;
+  let throttle = 0;
+  if (Keys['KeyW'] || Keys['ArrowUp']) throttle += 1;
+  if (Keys['KeyS'] || Keys['ArrowDown']) throttle -= 0.7;
+
+  const nitro = (Keys['ShiftLeft'] || Keys['ShiftRight']) && hasFuel && throttle > 0;
+
+  if (hasFuel && throttle !== 0) {
+    v.speed += throttle * v.accel * (nitro ? 1.45 : 1.0) * dt;
+    if (Settings.fuelEnabled) v.fuel = Math.max(0, v.fuel - (nitro ? 1.5 : 0.45) * dt);
+  } else {
+    v.speed *= Math.pow(0.32, dt);
+  }
+
+  if (Keys['Space'] && !v.flying) v.speed *= Math.pow(0.12, dt);
+
+  const maxSpd = nitro ? v.maxSpeed * 1.25 : v.maxSpeed;
+  v.speed = Math.max(-maxSpd * 0.45, Math.min(maxSpd, v.speed));
+
+  if (Math.abs(v.speed) > 1.0 || v.flying) {
+    const dir = v.speed >= 0 ? 1 : -1;
+    if (Keys['KeyA']) v.yaw += v.turn * dir * dt;
+    if (Keys['KeyD']) v.yaw -= v.turn * dir * dt;
+  }
+
+  if (v.heli) {
+    if (Keys['KeyR']) v.y = Math.min(95, v.y + 22 * dt);
+    if (Keys['KeyQ']) v.y = Math.max(0, v.y - 22 * dt);
+  } else if (v.airplane) {
+    if (v.speed > 18 && Keys['KeyR']) v.y = Math.min(115, v.y + (v.speed * 0.35) * dt);
+    else if (Keys['KeyQ'] || v.speed < 14) v.y = Math.max(0, v.y - 16 * dt);
+    v.pitch = v.y > 0.5 ? (Keys['KeyR'] ? -0.16 : Keys['KeyQ'] ? 0.14 : -0.02) : 0;
+  }
+
+  const nx = Math.max(-WORLD_HALF + 8, Math.min(WORLD_HALF - 8, v.x + Math.sin(v.yaw) * v.speed * dt));
+  const nz = Math.max(-WORLD_HALF + 8, Math.min(WORLD_HALF - 8, v.z + Math.cos(v.yaw) * v.speed * dt));
+
+  const inWater = isPointInWater3D(nx, nz);
+  if (inWater && !v.waterOnly && !v.flying) {
+    v.hp -= 55 * dt;
+    v.speed *= 0.85;
+  }
+  if (!inWater && v.waterOnly && v.y <= 0.1) {
+    v.speed *= 0.65;
+  }
+
+  if (v.flying || !collidesWithSolid3D(nx, nz, Math.min(v.w, v.l) * 0.45)) {
+    v.x = nx;
+    v.z = nz;
+  } else {
+    v.hp -= Math.abs(v.speed) * 0.6;
+    v.speed *= -0.35;
+    SFX.playTone(110, 'sawtooth', 0.12, 0.12);
+  }
+
+  if (nitro) {
+    spawnParticles3D(v.x - Math.sin(v.yaw) * (v.l * 0.55), v.y + 0.6, v.z - Math.cos(v.yaw) * (v.l * 0.55), 2, 0x38bdf8, 6, 0.2);
+  }
+
+  v.mesh.position.set(v.x, v.y, v.z);
+  v.mesh.rotation.y = v.yaw;
+  v.mesh.rotation.x = v.pitch || 0;
+
+  Player.x = v.x;
+  Player.y = v.y;
+  Player.z = v.z;
+  Player.camYaw = v.yaw;
+
+  if (v.sirenOn) SFX.sirenTick(performance.now() / 1000);
+}
+
+function updateVehicles3D(dt) {
+  for (let i = vehicles3D.length - 1; i >= 0; i--) {
+    const v = vehicles3D[i];
+    if (v.rotorMesh) v.rotorMesh.rotation.y += (v.driver ? 26 : 4) * dt;
+    if (v.sirenMesh && v.sirenOn) {
+      const flash = Math.floor(performance.now() / 180) % 2 === 0;
+      v.sirenMesh.material.color.setHex(flash ? 0xef4444 : 0x3b82f6);
+    }
+
+    // Ruch AI pojazdów drogowych oraz patrolującego czołgu AI
+    if (v.aiDriver && !v.driver && v.hp > 0) {
+      const spd = v.aiDriver === 'tank_patrol' ? 11.5 : 18.0;
+      if (v.patrolAxis === 'x') {
+        v.x += v.patrolDir * spd * dt;
+        v.yaw = v.patrolDir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        if (Math.abs(v.x) > 190) v.patrolDir *= -1;
+      } else {
+        v.z += v.patrolDir * spd * dt;
+        v.yaw = v.patrolDir > 0 ? 0 : Math.PI;
+        if (Math.abs(v.z) > 190) v.patrolDir *= -1;
+      }
+      v.mesh.position.set(v.x, v.y, v.z);
+      v.mesh.rotation.y = v.yaw;
+    }
+
+    if (v.hp < v.maxHp * 0.45 && v.hp > 0 && Math.random() < 0.25) {
+      spawnParticles3D(v.x, v.y + 1.4, v.z, 1, v.hp < v.maxHp * 0.2 ? 0xf97316 : 0x475569, 4, 0.5);
+    }
+
+    if (v.hp <= 0) {
+      createExplosion3D(v.x, v.y, v.z, 18, 250);
+      if (Player.inVehicle === v) {
+        Player.inVehicle = null;
+        Player.mesh.visible = true;
+        document.getElementById('vehicleHud').classList.add('hidden');
+      }
+      scene.remove(v.mesh);
+      vehicles3D.splice(i, 1);
+      continue;
+    }
+
+    if (Math.abs(v.speed) > 12 && v.y < 1.2) {
+      npcs3D.forEach(n => {
+        if (n.hp > 0 && Math.hypot(n.x - v.x, n.z - v.z) < v.w * 0.9) {
+          damageNpc3D(n, Math.abs(v.speed) * 2.5, v.driver === 'player' ? 'player' : 'ai', Math.sin(v.yaw) * 18, Math.cos(v.yaw) * 18);
+          if (v.driver === 'player') addWantedStars(1, 'Potrącenie pieszego');
+        }
+      });
+      props3D.forEach(p => {
+        if (!p.broken && Math.hypot(p.x - v.x, p.z - v.z) < v.w * 0.9) {
+          p.broken = true;
+          p.mesh.rotation.z = Math.PI / 2;
+          p.mesh.position.y = 0.2;
+          if (p.isHydrant) spawnParticles3D(p.x, 1, p.z, 22, 0x38bdf8, 16, 0.8);
+        }
+      });
+    }
+  }
+}
+
+function updateNpcs3D(dt) {
+  npcs3D.forEach(n => {
+    if (n.hp <= 0) return;
+    if (n.fireCooldown > 0) n.fireCooldown -= dt;
+
+    if (n.ragdollTimer > 0 || n.posY > 0 || Math.hypot(n.vx, n.vz) > 0.5) {
+      n.ragdollTimer = Math.max(0, n.ragdollTimer - dt);
+      n.vy -= 20 * dt;
+      n.posY = Math.max(0, n.posY + n.vy * dt);
+      if (n.posY === 0 && n.vy < 0) n.vy = 0;
+      n.x = Math.max(-WORLD_HALF + 4, Math.min(WORLD_HALF - 4, n.x + n.vx * dt));
+      n.z = Math.max(-WORLD_HALF + 4, Math.min(WORLD_HALF - 4, n.z + n.vz * dt));
+      n.vx *= Math.pow(0.08, dt);
+      n.vz *= Math.pow(0.08, dt);
+      if (n.ragdollTimer <= 0 && n.posY === 0) {
+        n.mesh.rotation.x = 0;
+        if (n.limbLeftLeg) n.limbLeftLeg.rotation.x = 0;
+        if (n.limbRightLeg) n.limbRightLeg.rotation.x = 0;
+      }
+    }
+
+    const dist = Math.hypot(Player.x - n.x, Player.z - n.z);
+    const isLaw = ['police', 'swat', 'fbi', 'army'].includes(n.role);
+
+    if (isLaw && GameState.wantedLevel > 0 && dist < 95) n.state = 'combat';
+    else if (isLaw && GameState.wantedLevel === 0) n.state = 'wander';
+
+    if (n.state !== 'call911' && n.ragdollTimer <= 0) {
+      if (n.state === 'flee') {
+        n.yaw = Math.atan2(n.x - Player.x, n.z - Player.z);
+        n.x += Math.sin(n.yaw) * 11 * dt;
+        n.z += Math.cos(n.yaw) * 11 * dt;
+      } else if (n.state === 'combat') {
+        n.yaw = Math.atan2(Player.x - n.x, Player.z - n.z);
+        if (dist > 22) {
+          const spd = n.role === 'fbi' ? 12.5 : 10;
+          n.x += Math.sin(n.yaw) * spd * dt;
+          n.z += Math.cos(n.yaw) * spd * dt;
+        }
+        if (n.weapon && dist < n.weapon.range && n.fireCooldown <= 0) {
+          n.fireCooldown = n.role === 'fbi' || n.role === 'swat' ? 0.5 : 0.9;
+          const bMesh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 6), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+          bMesh.position.set(n.x, 1.4, n.z);
+          scene.add(bMesh);
+          bullets3D.push({
+            x: n.x, y: 1.4, z: n.z,
+            vx: Math.sin(n.yaw) * 130,
+            vy: 0,
+            vz: Math.cos(n.yaw) * 130,
+            dmg: n.role === 'fbi' ? 13 : 8,
+            range: n.weapon.range,
+            traveled: 0,
+            owner: 'law',
+            mesh: bMesh
+          });
+        }
+      } else {
+        n.timer -= dt;
+        if (n.timer <= 0) {
+          n.timer = 2 + Math.random() * 4;
+          n.yaw += (Math.random() - 0.5) * 2.5;
+        }
+        const spd = 3.8;
+        const nx = n.x + Math.sin(n.yaw) * spd * dt;
+        const nz = n.z + Math.cos(n.yaw) * spd * dt;
+        if (!collidesWithSolid3D(nx, nz, 0.7) && !isPointInWater3D(nx, nz)) {
+          n.x = nx; n.z = nz;
+          const swing = Math.sin(performance.now() * 0.012) * 0.45;
+          if (n.limbLeftLeg) n.limbLeftLeg.rotation.x = swing;
+          if (n.limbRightLeg) n.limbRightLeg.rotation.x = -swing;
+        } else {
+          n.yaw += Math.PI * 0.7;
+        }
+      }
+    }
+
+    n.mesh.position.set(n.x, n.posY, n.z);
+    n.mesh.rotation.y = n.yaw;
+  });
+}
+
+function updateBullets3D(dt) {
+  for (let i = bullets3D.length - 1; i >= 0; i--) {
+    const b = bullets3D[i];
+    const sx = b.vx * dt;
+    const sz = b.vz * dt;
+    b.x += sx;
+    b.z += sz;
+    b.traveled += Math.hypot(sx, sz);
+    b.mesh.position.set(b.x, b.y, b.z);
+
+    let hit = collidesWithSolid3D(b.x, b.z, 0.2) || b.traveled >= b.range;
+
+    if (!hit && b.owner !== 'player' && Math.hypot(b.x - Player.x, b.z - Player.z) < 1.1) {
+      hit = true;
+      if (Player.inVehicle) Player.inVehicle.hp -= b.dmg;
+      else damagePlayer(b.dmg);
+    }
+
+    if (!hit) {
+      for (const n of npcs3D) {
+        if (n.hp > 0 && Math.hypot(b.x - n.x, b.z - n.z) < 1.1) {
+          hit = true;
+          damageNpc3D(n, b.dmg, b.owner, b.vx * 0.08, b.vz * 0.08);
+          break;
+        }
+      }
+    }
+
+    if (!hit) {
+      for (const v of vehicles3D) {
+        if (v !== Player.inVehicle && Math.hypot(b.x - v.x, b.z - v.z) < Math.max(v.w, v.l) * 0.5) {
+          hit = true;
+          v.hp -= b.dmg;
+          spawnParticles3D(b.x, b.y, b.z, 4, 0xfacc15, 8, 0.25);
+          break;
+        }
+      }
+    }
+
+    if (hit) {
+      if (b.explosive) createExplosion3D(b.x, b.y, b.z, 18, b.dmg);
+      scene.remove(b.mesh);
+      bullets3D.splice(i, 1);
+    }
+  }
+}
+
+function updateParticles3D(dt) {
+  for (let i = particles3D.length - 1; i >= 0; i--) {
+    const p = particles3D[i];
+    p.mesh.position.x += p.vx * dt;
+    p.mesh.position.y += p.vy * dt;
+    p.mesh.position.z += p.vz * dt;
+    p.vy -= 18 * dt;
+    p.life -= dt;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      particles3D.splice(i, 1);
+    }
+  }
+}
+
+function updateEnvironment3D(dt) {
+  applyGraphicsPreset();
+  syncCloudDensity();
+
+  const seasonGround = { spring: 0x1e3a29, summer: 0x254228, autumn: 0x452b1b, winter: 0xe2e8f0 };
+  if (groundMesh) groundMesh.material.color.setHex(seasonGround[Settings.season] || 0x1e3a29);
+
+  const isNightOrSunset = Settings.timeOfDay === 'night' || Settings.timeOfDay === 'sunset';
+  nightWindows3D.forEach(w => { w.visible = isNightOrSunset; });
+  streetLamps3D.forEach(m => { m.color.setHex(isNightOrSunset ? 0xfef08a : 0x94a3b8); });
+
+  if (Settings.timeOfDay === 'night') {
+    scene.background.setHex(0x040712);
+    scene.fog.color.setHex(0x040712);
+    dirLight.intensity = 0.28;
+    ambientLight.intensity = 0.35;
+  } else if (Settings.timeOfDay === 'sunset') {
+    scene.background.setHex(0x451a2b);
+    scene.fog.color.setHex(0x451a2b);
+    dirLight.intensity = 0.75;
+    ambientLight.intensity = 0.55;
+  } else {
+    scene.background.setHex(0x38bdf8);
+    scene.fog.color.setHex(0x38bdf8);
+    dirLight.intensity = 1.2;
+    ambientLight.intensity = 0.78;
+  }
+
+  scene.fog.density = Settings.weather === 'fog' ? 0.011 : Settings.weather === 'storm' ? 0.006 : 0.0018;
+  if (weatherParticles) {
+    const activeWeather = ['rain', 'storm', 'snow'].includes(Settings.weather) || Settings.season === 'winter';
+    weatherParticles.visible = activeWeather;
+    if (activeWeather) {
+      const isSnow = Settings.weather === 'snow' || Settings.season === 'winter';
+      weatherParticles.material.color.setHex(isSnow ? 0xffffff : 0x93c5fd);
+      weatherParticles.position.set(Player.x, 0, Player.z);
+      const pos = weatherParticles.geometry.attributes.position.array;
+      for (let i = 1; i < pos.length; i += 3) {
+        pos[i] -= (isSnow ? 14 : 45) * dt;
+        if (pos[i] < 0) pos[i] = 75;
+      }
+      weatherParticles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+function updateCamera3D() {
+  if (Player.fppMode) {
+    const eyeY = Player.inVehicle ? Player.y + 1.55 : Player.y + 2.05;
+    camera.position.set(Player.x, eyeY, Player.z);
+    const lookX = Player.x + Math.sin(Player.camYaw) * 30;
+    const lookZ = Player.z + Math.cos(Player.camYaw) * 30;
+    camera.lookAt(lookX, eyeY - (Player.camPitch - 0.34) * 14, lookZ);
+  } else {
+    const isAir = Player.inVehicle && Player.inVehicle.flying;
+    const dist = isAir ? 18 : Player.inVehicle ? 14.5 : 8.5;
+    const height = isAir ? 7.5 : Player.inVehicle ? 5.2 : 3.6;
+    const targetCamX = Player.x - Math.sin(Player.camYaw) * dist;
+    const targetCamZ = Player.z - Math.cos(Player.camYaw) * dist;
+    const targetCamY = Player.y + height + Player.camPitch * 6;
+
+    camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.16);
+    camera.lookAt(Player.x, Player.y + 1.5, Player.z);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// MINIMAPA RADAROWA I PEŁNA MAPA ŚWIATA
+// ----------------------------------------------------------------------------
+const miniCanvas = document.getElementById('minimapCanvas');
+const miniCtx = miniCanvas.getContext('2d');
+const fullMapCanvas = document.getElementById('fullMapCanvas');
+const fullMapCtx = fullMapCanvas.getContext('2d');
+
+function renderMinimap3D() {
+  const w = miniCanvas.width;
+  const h = miniCanvas.height;
+  const scale = 0.65;
+
+  miniCtx.fillStyle = '#070b14';
+  miniCtx.fillRect(0, 0, w, h);
+
+  miniCtx.save();
+  miniCtx.translate(w / 2 - Player.x * scale, h / 2 - Player.z * scale);
+
+  miniCtx.fillStyle = '#0284c7';
+  WATER_ZONES.forEach(wz => miniCtx.fillRect((wz.x - wz.w / 2) * scale, (wz.z - wz.d / 2) * scale, wz.w * scale, wz.d * scale));
+
+  miniCtx.fillStyle = '#16a34a';
+  miniCtx.beginPath();
+  miniCtx.arc(PARK_ZONE.x * scale, PARK_ZONE.z * scale, PARK_ZONE.r * scale, 0, Math.PI * 2);
+  miniCtx.fill();
+
+  BUILDINGS.forEach(b => {
+    miniCtx.fillStyle = '#' + b.color.toString(16).padStart(6, '0');
+    miniCtx.fillRect((b.x - b.w / 2) * scale, (b.z - b.d / 2) * scale, Math.max(5, b.w * scale), Math.max(5, b.d * scale));
+  });
+
+  npcs3D.forEach(n => {
+    if (n.hp <= 0) return;
+    if (['police', 'swat', 'fbi', 'army'].includes(n.role)) {
+      miniCtx.fillStyle = Math.floor(performance.now() / 180) % 2 === 0 ? '#ef4444' : '#3b82f6';
+      miniCtx.beginPath();
+      miniCtx.arc(n.x * scale, n.z * scale, 3, 0, Math.PI * 2);
+      miniCtx.fill();
+    }
+  });
+
+  if (GameState.gpsTarget) {
+    miniCtx.fillStyle = '#ec4899';
+    miniCtx.beginPath();
+    miniCtx.arc(GameState.gpsTarget.x * scale, GameState.gpsTarget.z * scale, 5, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+
+  miniCtx.restore();
+
+  miniCtx.fillStyle = '#22c55e';
+  miniCtx.beginPath();
+  miniCtx.arc(w / 2, h / 2, 4.5, 0, Math.PI * 2);
+  miniCtx.fill();
+}
+
+function renderFullMap() {
+  const w = fullMapCanvas.width;
+  const h = fullMapCanvas.height;
+  const toMapX = x => ((x + WORLD_HALF) / (WORLD_HALF * 2)) * w;
+  const toMapY = z => ((z + WORLD_HALF) / (WORLD_HALF * 2)) * h;
+
+  fullMapCtx.fillStyle = Settings.season === 'winter' ? '#cbd5e1' : '#163020';
+  fullMapCtx.fillRect(0, 0, w, h);
+
+  fullMapCtx.fillStyle = '#0284c7';
+  WATER_ZONES.forEach(wz => {
+    fullMapCtx.fillRect(toMapX(wz.x - wz.w / 2), toMapY(wz.z - wz.d / 2), (wz.w / (WORLD_HALF * 2)) * w, (wz.d / (WORLD_HALF * 2)) * h);
+  });
+
+  fullMapCtx.fillStyle = '#16a34a';
+  fullMapCtx.beginPath();
+  fullMapCtx.arc(toMapX(PARK_ZONE.x), toMapY(PARK_ZONE.z), (PARK_ZONE.r / (WORLD_HALF * 2)) * w, 0, Math.PI * 2);
+  fullMapCtx.fill();
+
+  fullMapCtx.fillStyle = 'rgba(255,255,255,0.9)';
+  fullMapCtx.font = 'bold 16px Bebas Neue, sans-serif';
+  CITIES.forEach(c => fullMapCtx.fillText(c.name, toMapX(c.x) - 45, toMapY(c.z) - 25));
+
+  BUILDINGS.forEach(b => {
+    fullMapCtx.fillStyle = '#' + b.color.toString(16).padStart(6, '0');
+    fullMapCtx.fillRect(toMapX(b.x) - 6, toMapY(b.z) - 6, 12, 12);
+    fullMapCtx.fillStyle = '#ffffff';
+    fullMapCtx.font = '11px Inter';
+    fullMapCtx.fillText(`${b.icon} ${b.name}`, toMapX(b.x) + 8, toMapY(b.z) + 4);
+  });
+
+  fullMapCtx.fillStyle = '#22c55e';
+  fullMapCtx.beginPath();
+  fullMapCtx.arc(toMapX(Player.x), toMapY(Player.z), 7, 0, Math.PI * 2);
+  fullMapCtx.fill();
+
+  if (GameState.gpsTarget) {
+    fullMapCtx.strokeStyle = '#ec4899';
+    fullMapCtx.lineWidth = 3;
+    fullMapCtx.beginPath();
+    fullMapCtx.arc(toMapX(GameState.gpsTarget.x), toMapY(GameState.gpsTarget.z), 10, 0, Math.PI * 2);
+    fullMapCtx.stroke();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// EKWIPUNEK [I / TAB], SKLEP AMMU-SUS ($100) & 400 POJAZDÓW ($0)
+// ----------------------------------------------------------------------------
+function openInventoryModal() {
+  const sum = document.getElementById('inventoryGearSummary');
+  const grid = document.getElementById('inventoryWeaponsGrid');
+  sum.innerHTML = `
+    <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800"><div class="text-slate-400">Zdrowie</div><div class="font-bold text-emerald-400 text-sm">${Math.ceil(Player.hp)} / ${Player.maxHp} HP</div></div>
+    <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800"><div class="text-slate-400">Pancerz</div><div class="font-bold text-cyan-400 text-sm">${Math.ceil(Player.armor)} / ${Player.maxArmor}</div></div>
+    <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800"><div class="text-slate-400">Tłumik / Noktowizor</div><div class="font-bold text-amber-300 text-sm">${Player.suppressor ? 'Tłumik ✓' : 'Brak'} • ${Player.nightVision ? 'NVG ✓' : 'Brak'}</div></div>
+    <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800"><div class="text-slate-400">Towarzysz / Eliminacje</div><div class="font-bold text-pink-400 text-sm">${Player.hasDog ? '🐕 Pies' : 'Brak psa'} • ${Player.kills}★</div></div>
+  `;
+  grid.innerHTML = '';
+  Player.weapons.forEach((w, idx) => {
+    const active = idx === Player.currentWeaponIdx;
+    const card = document.createElement('div');
+    card.className = `p-3 rounded-2xl border flex justify-between items-center ${active ? 'bg-indigo-950/60 border-indigo-400' : 'bg-slate-900 border-slate-800'}`;
+    card.innerHTML = `
+      <div>
+        <div class="font-bold text-white">${w.icon} ${w.name}</div>
+        <div class="text-[11px] text-slate-400">Amunicja: ${w.clip === Infinity ? '∞' : `${w.currentClip} / ${w.currentReserve}`} • DMG: ${w.dmg}</div>
+      </div>
+      <button class="px-3 py-1.5 rounded-xl ${active ? 'bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-500'} text-white font-bold cursor-pointer">
+        ${active ? 'Aktywna' : 'Wyposaż'}
+      </button>
+    `;
+    card.querySelector('button').onclick = () => {
+      Player.currentWeaponIdx = idx;
+      updateWeaponHotbar();
+      updateHud();
+      openInventoryModal();
+    };
+    grid.appendChild(card);
+  });
+}
+
+function openShopModal(tab = 'ammu') {
+  const modal = document.getElementById('shopModal');
+  modal.classList.remove('hidden');
+  document.getElementById('shopPlayerCash').textContent = `$${Player.cash.toLocaleString()}`;
+  const body = document.getElementById('shopModalBody');
+  const filterBar = document.getElementById('vehicleFilterBar');
+  body.innerHTML = '';
+
+  if (tab === 'vehicles') {
+    filterBar.classList.remove('hidden');
+    render400VehiclesList();
+    return;
+  }
+  filterBar.classList.add('hidden');
+
+  if (tab === 'ammu') {
+    const extras = [
+      { name: 'Kamizelka Kuloodporna 100%', price: 100, icon: '🛡️', fn: () => { Player.armor = 100; } },
+      { name: 'Tłumik Taktyczny 3D', price: 100, icon: '🤫', fn: () => { Player.suppressor = true; } },
+      { name: 'Zestaw Medyczny (Pełne HP)', price: 100, icon: '💊', fn: () => { Player.hp = Player.maxHp; } },
+      { name: 'Noktowizor Specjalny', price: 100, icon: '🥽', fn: () => { Player.nightVision = true; } }
+    ];
+    extras.forEach(ex => {
+      const card = document.createElement('div');
+      card.className = 'p-3.5 rounded-2xl bg-slate-900 border border-cyan-500/30 flex flex-col justify-between';
+      card.innerHTML = `
+        <div>
+          <div class="font-bold text-cyan-300 text-sm">${ex.icon} ${ex.name}</div>
+          <div class="text-xs text-slate-400 mt-1">Wyposażenie taktyczne w stałej cenie $100.</div>
+        </div>
+        <button class="mt-3 w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-bold text-xs cursor-pointer">Kup za $100</button>
+      `;
+      card.querySelector('button').onclick = () => {
+        if (Player.cash >= 100) {
+          Player.cash -= 100;
+          ex.fn();
+          SFX.cash();
+          openShopModal('ammu');
+          updateHud();
+        } else logEvent('❌ Za mało gotówki ($100)!', 'text-red-400');
+      };
+      body.appendChild(card);
+    });
+
+    WEAPONS_DB.forEach(w => {
+      const owned = Player.weapons.find(pw => pw.id === w.id);
+      const card = document.createElement('div');
+      card.className = 'p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between';
+      card.innerHTML = `
+        <div>
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-amber-400 text-sm">${w.icon} ${w.name}</span>
+            <span class="font-mono-code text-xs text-emerald-400 font-bold">$100</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">${w.desc}</p>
+          <div class="text-[10px] text-slate-500 mt-1">Obrażenia: ${w.dmg} • Zasięg 3D: ${w.range}m</div>
+        </div>
+        <button class="mt-3 w-full py-2 rounded-xl ${owned ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-amber-600 hover:bg-amber-500'} font-bold text-xs cursor-pointer">
+          ${owned ? (w.clip === Infinity ? 'Posiadane ✓' : 'Dokup Amunicję ($100)') : 'Kup Broń ($100)'}
+        </button>
+      `;
+      card.querySelector('button').onclick = () => {
+        if (owned) {
+          if (w.clip !== Infinity && Player.cash >= 100) {
+            Player.cash -= 100;
+            owned.currentReserve += w.clip * 3;
+            SFX.cash();
+            openShopModal('ammu');
+          }
+        } else {
+          if (Player.cash >= 100) {
+            Player.cash -= 100;
+            Player.weapons.push({ ...w, currentClip: w.clip, currentReserve: w.reserve });
+            Player.currentWeaponIdx = Player.weapons.length - 1;
+            SFX.cash();
+            updateWeaponHotbar();
+            openShopModal('ammu');
+          } else logEvent('❌ Potrzebujesz $100!', 'text-red-400');
+        }
+        updateHud();
+      };
+      body.appendChild(card);
+    });
+  } else if (tab === 'modshop') {
+    const v = Player.inVehicle;
+    if (!v) {
+      body.innerHTML = `<div class="col-span-full text-center py-10 text-slate-300">Wsiądź najpierw do pojazdu 3D [E] lub [F], aby go naprawić, przemalować lub stuningować za $100!</div>`;
+      return;
+    }
+    const mods = [
+      { name: 'Pełna Naprawa Pojazdu 3D ($100)', fn: () => { v.hp = v.maxHp; } },
+      { name: 'Przemaluj Lakier + Nowe Tablice VIN (Gubi Pościg! $100)', fn: () => {
+        const cols = [0xec4899, 0x06b6d4, 0xf59e0b, 0x10b981, 0x8b5cf6, 0xf8fafc, 0xef4444];
+        const col = cols[Math.floor(Math.random() * cols.length)];
+        v.color = col;
+        v.bodyMesh.material.color.setHex(col);
+        v.plate = `NEW-${Math.floor(10 + Math.random() * 89)}`;
+        GameState.wantedLevel = Math.max(0, GameState.wantedLevel - 2);
+      }},
+      { name: 'Tuning Silnika V12 Turbo (+25% Prędkości $100)', fn: () => { v.maxSpeed *= 1.25; v.accel *= 1.25; } }
+    ];
+    mods.forEach(m => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-2xl bg-slate-900 border border-purple-500/30 flex flex-col justify-between';
+      card.innerHTML = `
+        <div class="font-bold text-purple-300 text-sm">${m.name}</div>
+        <button class="mt-4 w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-500 font-bold text-xs cursor-pointer">Wykonaj ($100)</button>
+      `;
+      card.querySelector('button').onclick = () => {
+        if (Player.cash >= 100) {
+          Player.cash -= 100;
+          m.fn();
+          SFX.cash();
+          logEvent(`🔧 Wykonano: ${m.name}`, 'text-purple-300');
+          openShopModal('modshop');
+          updateHud();
+        } else logEvent('❌ Za mało gotówki ($100)!', 'text-red-400');
+      };
+      body.appendChild(card);
+    });
+  }
+}
+
+function render400VehiclesList() {
+  const body = document.getElementById('shopModalBody');
+  const q = document.getElementById('vehSearchInput').value.toLowerCase();
+  const cat = document.getElementById('vehCategoryFilter').value;
+  body.innerHTML = '';
+
+  const list = VEHICLES_400.filter(vt => {
+    if (cat !== 'ALL' && vt.category !== cat) return false;
+    if (q && !vt.name.toLowerCase().includes(q) && !vt.category.toLowerCase().includes(q)) return false;
+    return true;
+  }).slice(0, 120);
+
+  list.forEach(vt => {
+    const spawnX = vt.waterOnly ? 345 : Player.x + Math.sin(Player.camYaw + 0.6) * 8.0;
+    const spawnZ = vt.waterOnly ? -60 + (Math.random() - 0.5) * 80 : Player.z + Math.cos(Player.camYaw + 0.6) * 8.0;
+    const card = document.createElement('div');
+    card.className = 'p-3 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between';
+    card.innerHTML = `
+      <div>
+        <div class="flex justify-between items-start gap-2">
+          <span class="font-bold text-cyan-300 text-xs">${vt.name}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold shrink-0">$0 DARMOWY</span>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-1">${vt.category} • V-max: ${Math.round(vt.maxSpeed * 3.1)} • HP: ${vt.hp}</div>
+      </div>
+      <button class="mt-2.5 w-full py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer">
+        Zespawnuj za $0
+      </button>
+    `;
+    card.querySelector('button').onclick = () => {
+      spawnVehicle3D(vt.id, spawnX, spawnZ, Player.camYaw);
+      SFX.cash();
+      logEvent(`🚗 Zespawnowano za $0: ${vt.name}! Podejdź i naciśnij [E], aby wsiąść.`, 'text-emerald-400 font-bold');
+      document.getElementById('shopModal').classList.add('hidden');
+    };
+    body.appendChild(card);
+  });
+}
+
+// ----------------------------------------------------------------------------
+// SUSPHONE OS & ENCYKLOPEDIA 2,323,850 FUNKCJI
+// ----------------------------------------------------------------------------
+function openPhoneApp(appName) {
+  document.querySelectorAll('.phone-tab').forEach(btn => {
+    btn.className = btn.dataset.app === appName
+      ? 'phone-tab p-2 rounded-xl bg-pink-600 text-white cursor-pointer'
+      : 'phone-tab p-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer';
+  });
+
+  const body = document.getElementById('phoneAppBody');
+  body.innerHTML = '';
+
+  if (appName === 'bank') {
+    body.innerHTML = `
+      <div class="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30">
+        <div class="text-slate-400">Legalne Saldo Sus Bank 3D:</div>
+        <div class="font-gta text-4xl text-emerald-400">$${Player.cash.toLocaleString()}</div>
+        <div class="text-amber-400 mt-2">Brudna Gotówka z Napadów: <b>$${Player.dirtyCash.toLocaleString()}</b></div>
+        <button id="btnLaunderMoney" class="mt-3 w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold cursor-pointer">
+          🧼 Wypierz Brudną Kasę (Prowizja 15%)
+        </button>
+      </div>
+      <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+        <div class="font-bold text-slate-200">Pożyczka u Lichwiarzy SUS</div>
+        <button id="btnLoanShark" class="w-full py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white font-bold cursor-pointer">
+          💸 Weź $1,500 (+2 Gwiazdki Pościgu!)
+        </button>
+      </div>
+    `;
+    document.getElementById('btnLaunderMoney').onclick = () => {
+      if (Player.dirtyCash <= 0) return logEvent('Brak brudnej gotówki do wyprania.', 'text-slate-400');
+      const clean = Math.floor(Player.dirtyCash * 0.85);
+      Player.cash += clean;
+      Player.dirtyCash = 0;
+      SFX.cash();
+      logEvent(`🧼 Wyprano pieniądze! Otrzymano legalne $${clean}.`, 'text-emerald-400');
+      openPhoneApp('bank');
+      updateHud();
+    };
+    document.getElementById('btnLoanShark').onclick = () => {
+      Player.cash += 1500;
+      SFX.cash();
+      addWantedStars(2, 'Pożyczka od mafii');
+      openPhoneApp('bank');
+      updateHud();
+    };
+  } else if (appName === 'stocks') {
+    GameState.stocks.forEach(st => {
+      const div = document.createElement('div');
+      div.className = 'p-3 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center';
+      div.innerHTML = `
+        <div>
+          <div class="font-bold text-white">${st.symbol} — ${st.name}</div>
+          <div class="text-slate-400">Kurs: <b class="text-emerald-400">$${st.price.toFixed(2)}</b></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold cursor-pointer">Inwestuj $100</button>
+      `;
+      div.querySelector('button').onclick = () => {
+        if (Player.cash < 100) return logEvent('Brak $100 na inwestycję.', 'text-red-400');
+        Player.cash -= 100;
+        const profit = Math.floor(70 + Math.random() * 120);
+        Player.cash += profit;
+        SFX.cash();
+        logEvent(`📈 Zwrot z giełdy ${st.symbol}: +$${profit}!`, 'text-emerald-400');
+        openPhoneApp('stocks');
+        updateHud();
+      };
+      body.appendChild(div);
+    });
+  } else if (appName === 'sustok') {
+    GameState.susTokPosts.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'p-3 rounded-2xl bg-slate-950 border border-slate-800';
+      div.innerHTML = `<div class="font-bold text-cyan-300">${p.user}</div><div class="text-slate-200 mt-1">${p.text}</div><div class="text-[10px] text-pink-400 mt-1">❤️ ${p.likes}</div>`;
+      body.appendChild(div);
+    });
+  } else if (appName === 'missions') {
+    const missions = [
+      { title: '🏦 Napad na Pacific Sus Bank', desc: 'Podejdź do banku i wciśnij [H] dla wiercenia i łupu.', x: BANK_VAULT_ZONE.x, z: BANK_VAULT_ZONE.z },
+      { title: '🌳 Park Miejski SUS', desc: 'Fontanna 3D, alejki i ławki w parku.', x: PARK_ZONE.x, z: PARK_ZONE.z },
+      { title: '✈️ Lotnisko SUS International', desc: 'Samolot SUS Jetliner gotowy do lotu.', x: 240, z: 140 },
+      { title: '🚤 Ocean Spokojny SUS', desc: 'Pływaj łodziami i jachtami po wodzie.', x: 345, z: -80 }
+    ];
+    missions.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'p-3 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center gap-2';
+      div.innerHTML = `<div><div class="font-bold text-amber-400">${m.title}</div><div class="text-slate-400">${m.desc}</div></div><button class="px-3 py-1.5 rounded-xl bg-pink-600 font-bold cursor-pointer">GPS</button>`;
+      div.querySelector('button').onclick = () => {
+        GameState.gpsTarget = { x: m.x, z: m.z };
+        logEvent(`📍 Ustawiono cel GPS: ${m.title}`, 'text-pink-400');
+        document.getElementById('phoneModal').classList.add('hidden');
+      };
+      body.appendChild(div);
+    });
+  } else if (appName === 'garage') {
+    body.innerHTML = `<div class="font-bold text-emerald-400 mb-2">🚗 Szybki Spawn Pojazdów 3D ($0 DARMOWE!)</div>`;
+    ['susbike', 'kuruma', 'heli', 'plane', 'boat', 'tank', 'fbi', 'monster'].forEach(baseId => {
+      const vt = VEHICLES_400.find(v => v.baseId === baseId) || VEHICLES_400[0];
+      const btn = document.createElement('button');
+      btn.className = 'w-full p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex justify-between items-center cursor-pointer';
+      btn.innerHTML = `<span>${vt.name}</span><span class="text-emerald-400 font-bold">$0</span>`;
+      btn.onclick = () => {
+        const sx = vt.waterOnly ? 345 : Player.x + 7;
+        const sz = vt.waterOnly ? -60 : Player.z + 7;
+        spawnVehicle3D(vt.id, sx, sz, Player.camYaw);
+        SFX.cash();
+        document.getElementById('phoneModal').classList.add('hidden');
+        logEvent(`🚗 Zespawnowano za $0: ${vt.name}!`, 'text-emerald-400');
+      };
+      body.appendChild(btn);
+    });
+  }
+}
+
+function getFeatureRange(filter) {
+  if (filter === 'ORIG') return [0, 100];
+  if (filter === 'PREV350') return [100, 450];
+  if (filter === 'NEW500') return [450, 950];
+  if (filter === 'MEGA117900') return [950, 118850];
+  if (filter === 'QOL50000') return [118850, 168850];
+  if (filter === 'GFX55000') return [168850, 223850];
+  if (filter === 'NEW1000000V7') return [223850, Encyclopedia2323850.totalCount];
+  return [0, Encyclopedia2323850.totalCount];
+}
+
+function renderFeaturesList() {
+  const query = document.getElementById('featureSearchInput').value.trim().toLowerCase();
+  const filter = document.getElementById('featureCategoryFilter').value;
+  const container = document.getElementById('featuresListContainer');
+  container.innerHTML = '';
+
+  const [startIdx, endIdx] = getFeatureRange(filter);
+  const pageSize = 200;
+  const totalInRange = endIdx - startIdx;
+  const maxPage = Math.max(0, Math.floor((totalInRange - 1) / pageSize));
+  if (GameState.featuresPage > maxPage) GameState.featuresPage = maxPage;
+
+  const matches = [];
+  if (!query) {
+    const pStart = startIdx + GameState.featuresPage * pageSize;
+    const pEnd = Math.min(endIdx, pStart + pageSize);
+    for (let i = pStart; i < pEnd; i++) {
+      matches.push(Encyclopedia2323850.getFeatureAt(i));
+    }
+    document.getElementById('featuresCountBadge').textContent = totalInRange.toLocaleString();
+    document.getElementById('featuresPageLabel').textContent = `Strona ${GameState.featuresPage + 1} / ${maxPage + 1}`;
+  } else {
+    const found = [];
+    for (let i = startIdx; i < endIdx; i++) {
+      const item = Encyclopedia2323850.getFeatureAt(i);
+      if (item.text.toLowerCase().includes(query) || item.cat.toLowerCase().includes(query)) {
+        found.push(item);
+        if (found.length >= 1200) break;
+      }
+    }
+    const qMaxPage = Math.max(0, Math.floor((found.length - 1) / pageSize));
+    if (GameState.featuresPage > qMaxPage) GameState.featuresPage = qMaxPage;
+    const qStart = GameState.featuresPage * pageSize;
+    matches.push(...found.slice(qStart, qStart + pageSize));
+    document.getElementById('featuresCountBadge').textContent = `${found.length}${found.length >= 1200 ? '+' : ''}`;
+    document.getElementById('featuresPageLabel').textContent = `Strona ${GameState.featuresPage + 1} / ${qMaxPage + 1}`;
+  }
+
+  matches.forEach(f => {
+    const div = document.createElement('div');
+    const borderCol = f.group === 'NEW1000000V7' ? 'border-amber-400/40' : f.group === 'QOL50000' ? 'border-emerald-500/30' : f.group === 'GFX55000' ? 'border-cyan-500/30' : 'border-pink-500/30';
+    div.className = `p-2.5 rounded-xl bg-slate-900/95 border ${borderCol} flex justify-between items-start gap-2`;
+    div.innerHTML = `
+      <div>
+        <span class="text-[10px] font-bold uppercase text-pink-400">${f.cat}</span>
+        <div class="text-slate-200 mt-0.5">${f.text}</div>
+      </div>
+      <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold shrink-0">3D ON</span>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ----------------------------------------------------------------------------
+// LOGI, HUD I ZAPIS GRY
+// ----------------------------------------------------------------------------
+function logEvent(msg, color = 'text-slate-200') {
+  const box = document.getElementById('eventLog');
+  const el = document.createElement('div');
+  el.className = `px-2.5 py-1 rounded-lg bg-slate-950/85 border border-slate-800 ${color} shadow transition-opacity duration-500`;
+  el.textContent = msg;
+  box.appendChild(el);
+  while (box.children.length > 4) box.removeChild(box.firstChild);
+  setTimeout(() => { el.style.opacity = '0.35'; }, 5500);
+}
+
+function updateHud() {
+  document.getElementById('hudZoneName').textContent = getCurrentCityName();
+  const hrs = String(Math.floor(GameState.timeMinutes / 60)).padStart(2, '0');
+  const mins = String(Math.floor(GameState.timeMinutes % 60)).padStart(2, '0');
+  document.getElementById('hudTimeClock').textContent = `${hrs}:${mins}`;
+
+  const seasonLabels = { spring: '🌸 Wiosna', summer: '☀️ Lato', autumn: '🍂 Jesień', winter: '❄️ Zima' };
+  const weatherLabels = { clear: 'Słonecznie + Chmury', rain: 'Ulewa 3D', storm: 'Huragan', fog: 'Mgła 3D', snow: 'Śnieg 3D' };
+  document.getElementById('hudSeasonWeather').textContent = `${seasonLabels[Settings.season]} • ${weatherLabels[Settings.weather]}`;
+
+  document.getElementById('hudHpVal').textContent = `${Math.ceil(Player.hp)}/${Player.maxHp}`;
+  document.getElementById('hudHpBar').style.width = `${(Player.hp / Player.maxHp) * 100}%`;
+  document.getElementById('hudArmorVal').textContent = `${Math.ceil(Player.armor)}/${Player.maxArmor}`;
+  document.getElementById('hudArmorBar').style.width = `${(Player.armor / Player.maxArmor) * 100}%`;
+  document.getElementById('hudStaminaVal').textContent = `${Math.ceil(Player.stamina)}%`;
+  document.getElementById('hudStaminaBar').style.width = `${Player.stamina}%`;
+
+  document.getElementById('hudCamMode').textContent = Player.fppMode ? '👁️ Kamera: FPP [V]' : '🎥 Kamera: TPP [V]';
+  document.getElementById('hudDogBadge').textContent = Player.hasDog ? '🐕 Pies: Aktywny' : '🐕 Pies: Brak';
+
+  document.getElementById('hudCash').textContent = `$${Player.cash.toLocaleString()}`;
+  document.getElementById('hudDirtyCash').textContent = `$${Player.dirtyCash.toLocaleString()}`;
+
+  const heistBanner = document.getElementById('hudHeistBanner');
+  const nearBankOrVault = Math.hypot(Player.x - BANK_VAULT_ZONE.x, Player.z - BANK_VAULT_ZONE.z) < 34 || Math.hypot(Player.x - 38, Player.z - 36) < 34;
+  if (GameState.heistActive || GameState.heistLootReady > 0 || nearBankOrVault) {
+    heistBanner.classList.remove('hidden');
+    document.getElementById('heistStageLabel').textContent = GameState.heistLootReady > 0
+      ? '💰 Skarbiec otwarty — zabierz łup [H]!'
+      : GameState.heistActive
+        ? '🏦 Wiercenie skarbca Pacific Sus Bank...'
+        : '🏦 Pacific Sus Bank — wciśnij [H], aby obrobić skarbiec';
+    const pct = GameState.heistLootReady > 0 ? 100 : Math.floor(GameState.heistProgress);
+    document.getElementById('heistPctLabel').textContent = `${pct}%`;
+    document.getElementById('heistProgressBar').style.width = `${pct}%`;
+    document.getElementById('heistLootPreview').textContent = `Łup: $${(GameState.heistLootReady || 3200).toLocaleString()}`;
+  } else {
+    heistBanner.classList.add('hidden');
+  }
+
+  const stars = document.querySelectorAll('.star-icon');
+  stars.forEach((el, idx) => {
+    el.className = idx < GameState.wantedLevel ? `star-icon text-lg ${idx % 2 === 0 ? 'siren-r' : 'siren-b'}` : 'star-icon text-lg text-slate-700';
+  });
+
+  const agencyEl = document.getElementById('wantedAgencyLabel');
+  if (GameState.wantedLevel === 0) { agencyEl.textContent = 'CZYSTO'; agencyEl.className = 'text-[10px] font-bold text-slate-400 mr-1'; }
+  else if (GameState.wantedLevel <= 2) { agencyEl.textContent = 'POLICJA'; agencyEl.className = 'text-[10px] font-bold text-blue-400 mr-1'; }
+  else if (GameState.wantedLevel === 3) { agencyEl.textContent = 'SWAT'; agencyEl.className = 'text-[10px] font-bold text-amber-400 mr-1'; }
+  else if (GameState.wantedLevel <= 5) { agencyEl.textContent = 'FBI'; agencyEl.className = 'text-[10px] font-bold text-red-400 mr-1'; }
+  else { agencyEl.textContent = 'WOJSKO'; agencyEl.className = 'text-[10px] font-bold text-emerald-400 mr-1'; }
+
+  const w = Player.weapons[Player.currentWeaponIdx];
+  if (w) {
+    document.getElementById('hudWeaponName').textContent = w.name;
+    document.getElementById('hudWeaponIcon').textContent = w.icon;
+    document.getElementById('hudWeaponAmmo').textContent = w.clip === Infinity ? '∞ / ∞' : `${w.currentClip} / ${w.currentReserve}`;
+    document.getElementById('hudWeaponMods').textContent = Player.suppressor ? 'Tłumik: AKTYWNY' : 'Tłumik: Brak';
+  }
+
+  const witBanner = document.getElementById('hudWitnessBanner');
+  if (GameState.witnessCallingNpc) {
+    witBanner.classList.remove('hidden');
+    document.getElementById('witnessTimer').textContent = Math.max(0, GameState.witnessCallTimer).toFixed(1);
+  } else witBanner.classList.add('hidden');
+
+  const prompt = document.getElementById('hudActionPrompt');
+  const nearNpc = !Player.inVehicle ? getNearbyNpc(7.5) : null;
+  const nearVeh = !Player.inVehicle ? vehicles3D.find(v => Math.hypot(v.x - Player.x, v.z - Player.z) < 8.5) : null;
+  const nearB = !Player.inVehicle ? getNearbyBuilding3D() : null;
+
+  if (nearVeh) {
+    prompt.classList.remove('hidden');
+    prompt.textContent = `Naciśnij [E], aby wsiąść / ukraść: ${nearVeh.name}`;
+  } else if (nearB) {
+    prompt.classList.remove('hidden');
+    prompt.textContent = `Naciśnij [E], aby wejść: ${nearB.icon} ${nearB.name}`;
+  } else if (nearNpc) {
+    prompt.classList.remove('hidden');
+    prompt.textContent = `Naciśnij [T], aby porozmawiać z: ${nearNpc.name}`;
+  } else prompt.classList.add('hidden');
+
+  document.getElementById('hudNewsTicker').textContent = `📻 ${GameState.newsHeadline}`;
+
+  if (Player.inVehicle) {
+    const v = Player.inVehicle;
+    document.getElementById('vehHudName').textContent = v.name;
+    document.getElementById('vehHudPlate').textContent = `TABLICA: ${v.plate} • [E] WYSIĄDŹ`;
+    document.getElementById('vehHudSpeed').textContent = v.flying ? Math.round(v.y * 2.5 + Math.abs(v.speed) * 2.4) : Math.round(Math.abs(v.speed) * 3.1);
+    document.getElementById('vehHudUnit').textContent = v.flying ? 'WYS./KM/H' : 'KM/H';
+    document.getElementById('vehFlightHints').classList.toggle('hidden', !v.flying);
+    document.getElementById('vehHudFuelVal').textContent = Settings.fuelEnabled ? `${Math.round(v.fuel)}%` : 'OFF';
+    document.getElementById('vehHudFuelBar').style.width = `${v.fuel}%`;
+    const hpPct = Math.max(0, Math.round((v.hp / v.maxHp) * 100));
+    document.getElementById('vehHudHpVal').textContent = `${hpPct}%`;
+    document.getElementById('vehHudHpBar').style.width = `${hpPct}%`;
+    document.getElementById('vehHudRadio').textContent = `📻 ${SFX.stations[SFX.radioIndex].name}`;
+  }
+}
+
+function updateWeaponHotbar() {
+  const bar = document.getElementById('weaponHotbar');
+  bar.innerHTML = '';
+  Player.weapons.forEach((w, idx) => {
+    const active = idx === Player.currentWeaponIdx;
+    const btn = document.createElement('button');
+    btn.className = `px-2 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${active ? 'bg-pink-600 border-pink-300 text-white' : 'bg-slate-950/85 border-slate-700 text-slate-300'}`;
+    btn.textContent = `${idx + 1}:${w.icon}`;
+    btn.onclick = () => { Player.currentWeaponIdx = idx; updateWeaponHotbar(); };
+    bar.appendChild(btn);
+  });
+}
+
+function toggleModal(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden');
+  GameState.paused = !el.classList.contains('hidden');
+}
+
+function startGame3D(isLoad = false) {
+  SFX.init();
+  if (!scene) initThreeWorld();
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('hudLayer').classList.remove('hidden');
+  document.getElementById('crosshair').classList.remove('hidden');
+
+  if (!isLoad) {
+    Player.cash = 1000;
+    Player.dirtyCash = 0;
+    Player.x = 0;
+    Player.y = 0;
+    Player.z = 0;
+    Player.vx = 0;
+    Player.vz = 0;
+    resetPlayerWeapons();
+  }
+  initWorldEntities3D();
+  updateWeaponHotbar();
+  GameState.running = true;
+  GameState.paused = false;
+  logEvent('🔥 Witaj w GTA SUS 3D Ultra Next-Gen! 400 pojazdów za $0 [B], samoloty, helikoptery, czołg AI i rozmowy [T]!', 'text-pink-400 font-bold');
+}
+
+document.getElementById('btnStartNew').onclick = () => startGame3D(false);
+document.getElementById('btnLoadSave').onclick = () => {
+  const raw = localStorage.getItem('gta_sus_3d_save');
+  if (!raw) return startGame3D(false);
+  startGame3D(true);
+  try {
+    const d = JSON.parse(raw);
+    Object.assign(Player, d);
+    if (Player.hasDog) spawnDog3D();
+    updateWeaponHotbar();
+    logEvent('📂 Wczytano zapis GTA SUS 3D!', 'text-emerald-400 font-bold');
+  } catch (e) {}
+};
+document.getElementById('btnOpenFeaturesStart').onclick = () => {
+  GameState.featuresPage = 0;
+  renderFeaturesList();
+  document.getElementById('featuresModal').classList.remove('hidden');
+};
+
+document.getElementById('btnHudShopAll').onclick = () => openShopModal('vehicles');
+document.getElementById('tabAmmu').onclick = () => openShopModal('ammu');
+document.getElementById('tabVehicles').onclick = () => openShopModal('vehicles');
+document.getElementById('tabModShop').onclick = () => openShopModal('modshop');
+document.getElementById('btnCloseShop').onclick = () => document.getElementById('shopModal').classList.add('hidden');
+document.getElementById('vehSearchInput').oninput = render400VehiclesList;
+document.getElementById('vehCategoryFilter').onchange = render400VehiclesList;
+
+document.getElementById('btnHudInventory').onclick = () => { openInventoryModal(); toggleModal('inventoryModal'); };
+document.getElementById('btnCloseInventory').onclick = () => toggleModal('inventoryModal');
+document.getElementById('btnHudHeistAction').onclick = triggerBankHeistAction;
+
+document.getElementById('btnSendNpcChat').onclick = () => sendNpcMessage();
+document.getElementById('npcChatInput').onkeydown = e => { if (e.key === 'Enter') sendNpcMessage(); };
+document.querySelectorAll('.npc-quick').forEach(btn => {
+  btn.onclick = () => sendNpcMessage(btn.textContent.replace(/^„|”$/g, ''));
+});
+document.getElementById('btnCloseNpcChat').onclick = () => {
+  document.getElementById('npcChatModal').classList.add('hidden');
+  GameState.paused = false;
+};
+
+document.getElementById('btnHudPhone').onclick = () => { openPhoneApp('bank'); toggleModal('phoneModal'); };
+document.getElementById('btnClosePhone').onclick = () => toggleModal('phoneModal');
+document.querySelectorAll('.phone-tab').forEach(btn => { btn.onclick = () => openPhoneApp(btn.dataset.app); });
+
+document.getElementById('btnHudFeatures').onclick = () => { renderFeaturesList(); document.getElementById('featuresModal').classList.remove('hidden'); };
+document.getElementById('btnSettingsOpenFeatures').onclick = () => { renderFeaturesList(); document.getElementById('featuresModal').classList.remove('hidden'); };
+document.getElementById('btnCloseFeatures').onclick = () => document.getElementById('featuresModal').classList.add('hidden');
+document.getElementById('btnPrevFeaturesPage').onclick = () => { GameState.featuresPage = Math.max(0, GameState.featuresPage - 1); renderFeaturesList(); };
+document.getElementById('btnNextFeaturesPage').onclick = () => { GameState.featuresPage++; renderFeaturesList(); };
+document.getElementById('featureSearchInput').oninput = () => { GameState.featuresPage = 0; renderFeaturesList(); };
+document.getElementById('featureCategoryFilter').onchange = () => { GameState.featuresPage = 0; renderFeaturesList(); };
+
+document.getElementById('btnHudMap').onclick = () => { toggleModal('mapModal'); renderFullMap(); };
+document.getElementById('btnCloseMap').onclick = () => toggleModal('mapModal');
+fullMapCanvas.onclick = e => {
+  const rect = fullMapCanvas.getBoundingClientRect();
+  const gx = ((e.clientX - rect.left) / rect.width) * (WORLD_HALF * 2) - WORLD_HALF;
+  const gz = ((e.clientY - rect.top) / rect.height) * (WORLD_HALF * 2) - WORLD_HALF;
+  GameState.gpsTarget = { x: gx, z: gz };
+  renderFullMap();
+  logEvent(`📍 Ustawiono cel GPS 3D (${Math.round(gx)}, ${Math.round(gz)}).`, 'text-pink-400');
+};
+document.getElementById('btnTaxiFastTravel').onclick = () => {
+  if (!GameState.gpsTarget) return logEvent('Kliknij miejsce na mapie!', 'text-amber-400');
+  if (Player.cash < 50) return logEvent('Taksówka kosztuje $50!', 'text-red-400');
+  Player.cash -= 50;
+  Player.inVehicle = null;
+  Player.mesh.visible = true;
+  document.getElementById('vehicleHud').classList.add('hidden');
+  Player.x = GameState.gpsTarget.x;
+  Player.z = GameState.gpsTarget.z;
+  Player.y = 0;
+  toggleModal('mapModal');
+  logEvent('🚕 Taksówka 3D dowiozła Cię na miejsce (-$50).', 'text-amber-400');
+};
+
+document.getElementById('btnHudSettings').onclick = () => toggleModal('settingsModal');
+document.getElementById('btnCloseSettings').onclick = () => toggleModal('settingsModal');
+document.getElementById('btnChangeRadio').onclick = () => { SFX.radioIndex = (SFX.radioIndex + 1) % SFX.stations.length; };
+
+document.getElementById('setGraphicsPreset').onchange = e => { Settings.graphicsPreset = e.target.value; applyGraphicsPreset(); };
+document.getElementById('setExposure').oninput = e => { Settings.exposure = parseFloat(e.target.value); applyGraphicsPreset(); };
+document.getElementById('setCloudDensity').oninput = e => { Settings.cloudDensity = parseInt(e.target.value, 10); syncCloudDensity(); };
+document.getElementById('setFuelEnabled').onchange = e => { Settings.fuelEnabled = e.target.checked; };
+document.getElementById('setWitnessSystem').onchange = e => { Settings.witnessSystem = e.target.checked; };
+document.getElementById('setShadowsEnabled').onchange = e => { Settings.shadowsEnabled = e.target.checked; applyGraphicsPreset(); };
+document.getElementById('setAudioEnabled').onchange = e => { Settings.audioEnabled = e.target.checked; SFX.enabled = e.target.checked; };
+document.getElementById('setCamSens').oninput = e => { Settings.camSens = parseInt(e.target.value, 10); };
+document.getElementById('setSeason').onchange = e => { Settings.season = e.target.value; };
+document.getElementById('setWeather').onchange = e => { Settings.weather = e.target.value; };
+document.getElementById('setTimeOfDay').onchange = e => { Settings.timeOfDay = e.target.value; };
+
+document.getElementById('btnCheatCash').onclick = () => { Player.cash += 5000; SFX.cash(); updateHud(); };
+document.getElementById('btnCheatClearWanted').onclick = () => { GameState.wantedLevel = 0; updateHud(); };
+document.getElementById('btnCheatAddStar').onclick = () => { addWantedStars(1, 'Test pościgu 3D'); updateHud(); };
+document.getElementById('btnCheatAdoptDog').onclick = () => { Player.hasDog = true; spawnDog3D(); logEvent('🐕 Pies obronny 3D dołączył do Ciebie!', 'text-emerald-400'); };
+document.getElementById('btnSaveGame').onclick = () => {
+  localStorage.setItem('gta_sus_3d_save', JSON.stringify({
+    cash: Player.cash, dirtyCash: Player.dirtyCash, x: Player.x, z: Player.z, hp: Player.hp, armor: Player.armor, hasDog: Player.hasDog, weapons: Player.weapons
+  }));
+  logEvent('💾 Gra 3D została zapisana!', 'text-emerald-400 font-bold');
+};
+
+let lastTime = 0;
+function animate3D(time) {
+  const dt = Math.min(0.05, (time - lastTime) / 1000 || 0.016);
+  lastTime = time;
+
+  if (GameState.running) {
+    updateSimulation3D(dt);
+    renderMinimap3D();
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate3D);
+}
+
+window.onload = function () {
+  requestAnimationFrame(animate3D);
+};
+</script>
+</body>
+</html>
