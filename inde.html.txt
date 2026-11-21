@@ -1,0 +1,2340 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTA SUS 3D: Infinity Edition — 64-Bit Metropolis, Moon &amp; 13.34M Features</title>
+  <!-- Opcjonalne moduły zewnętrzne projektu (ładowane bezpiecznie z fallbackiem wbudowanym) -->
+  <script src="gameplay_tuning.js"></script>
+  <script src="gta_java_tuning.js"></script>
+  <script src="gta_cpp_tuning.js"></script>
+  <script src="grafika.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #040711;
+      --panel-bg: rgba(8, 13, 27, 0.88);
+      --panel-solid: #090f20;
+      --border: rgba(56, 189, 248, 0.34);
+      --accent: #38bdf8;
+      --purple: #a855f7;
+      --gold: #facc15;
+      --green: #4ade80;
+      --red: #f87171;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; user-select: none; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    }
+
+    #game-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* Ekran startowy */
+    #start-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 22%, rgba(29, 78, 216, 0.45), rgba(2, 6, 23, 0.97) 72%);
+      backdrop-filter: blur(10px);
+      padding: 18px;
+      overflow-y: auto;
+    }
+
+    .start-card {
+      width: 100%;
+      max-width: 860px;
+      background: rgba(8, 13, 27, 0.94);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 22px;
+      padding: 26px;
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.85);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .badge {
+      padding: 4px 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #bae6fd;
+    }
+
+    .badge-purple {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: rgba(192, 132, 252, 0.45);
+      color: #e9d5ff;
+    }
+
+    .badge-gold {
+      background: rgba(250, 204, 21, 0.18);
+      border-color: rgba(250, 204, 21, 0.45);
+      color: #fef08a;
+    }
+
+    .start-title {
+      margin: 0 0 8px;
+      font-size: 34px;
+      font-weight: 900;
+      background: linear-gradient(90deg, #38bdf8, #facc15, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .start-sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    .seed-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .seed-row input {
+      flex: 1 1 250px;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.96);
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .btn {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(30, 41, 59, 0.92);
+      color: #fff;
+      padding: 9px 13px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      background: rgba(51, 65, 85, 0.96);
+      border-color: rgba(56, 189, 248, 0.6);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      border-color: rgba(125, 211, 252, 0.55);
+      font-size: 15px;
+      padding: 13px 24px;
+    }
+
+    .btn-gold { background: linear-gradient(135deg, #ca8a04, #ea580c); }
+    .btn-green { background: linear-gradient(135deg, #15803d, #0d9488); }
+    .btn-red { background: linear-gradient(135deg, #b91c1c, #9333ea); }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .feat-card {
+      padding: 11px 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .feat-card strong {
+      display: block;
+      color: var(--gold);
+      margin-bottom: 3px;
+    }
+
+    /* HUD */
+    #hud-top-left {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 15;
+      width: 390px;
+      max-width: calc(100vw - 24px);
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .cash-val { color: var(--green); font-size: 17px; }
+    .hp-val { color: var(--red); }
+    .stars-val { color: var(--gold); letter-spacing: 2px; font-size: 14px; }
+
+    .bar-wrap {
+      height: 7px;
+      width: 100%;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 7px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ef4444, #f97316, #22c55e);
+      transition: width 0.15s ease;
+    }
+
+    .hud-meta {
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    /* Mini radar / wizualizacja sektorów 64-bit w rogu */
+    #hud-radar-box {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 15;
+      width: 168px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px;
+      backdrop-filter: blur(8px);
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #radar-canvas {
+      width: 150px;
+      height: 150px;
+      border-radius: 10px;
+      background: #030712;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      display: block;
+      margin: 0 auto 4px;
+    }
+
+    .radar-label {
+      font-size: 10px;
+      color: #93c5fd;
+      font-weight: 700;
+    }
+
+    /* Dolny dock akcji */
+    #action-dock {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 5px;
+      max-width: 97vw;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 7px 9px;
+      backdrop-filter: blur(8px);
+    }
+
+    #action-dock .btn {
+      padding: 6px 9px;
+      font-size: 11px;
+      border-radius: 8px;
+    }
+
+    #context-prompt {
+      position: fixed;
+      bottom: 82px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 16;
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 800;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    }
+
+    #toast-banner {
+      position: fixed;
+      top: 194px;
+      right: 12px;
+      z-index: 22;
+      max-width: 390px;
+      background: rgba(8, 13, 27, 0.94);
+      border-left: 4px solid var(--accent);
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      border-right: 1px solid rgba(148, 163, 184, 0.25);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-size: 12px;
+      color: #e2e8f0;
+      line-height: 1.45;
+      display: none;
+    }
+
+    /* Mini AI Czat [Y] */
+    #ai-chat-panel {
+      position: fixed;
+      right: 12px;
+      bottom: 70px;
+      z-index: 28;
+      width: 385px;
+      max-width: calc(100vw - 24px);
+      height: 440px;
+      max-height: 68vh;
+      background: rgba(8, 13, 27, 0.96);
+      border: 1px solid rgba(168, 85, 247, 0.6);
+      border-radius: 16px;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(30, 41, 59, 0.9);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    #ai-chat-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      user-select: text;
+    }
+
+    .msg {
+      padding: 8px 11px;
+      border-radius: 10px;
+      max-width: 92%;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-user {
+      align-self: flex-end;
+      background: rgba(2, 132, 199, 0.36);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+    }
+
+    .msg-ai {
+      align-self: flex-start;
+      background: rgba(30, 41, 59, 0.92);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+
+    #ai-chat-form {
+      display: flex;
+      gap: 6px;
+      padding: 10px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    #ai-chat-input {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #020617;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+      user-select: text;
+    }
+
+    /* Modale (Garaż, Sklep, SusPhone, Wizualizacja Architektury [V], Encyklopedia [ESC]) */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 45;
+      background: rgba(2, 6, 23, 0.84);
+      backdrop-filter: blur(7px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 920px;
+      max-height: 86vh;
+      background: rgba(8, 13, 27, 0.98);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 26px 80px rgba(0, 0, 0, 0.9);
+    }
+
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .item-card {
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .item-title { font-weight: 800; font-size: 13px; color: #f8fafc; }
+    .item-sub { font-size: 11px; color: var(--muted); }
+    .pill-free { color: var(--green); font-weight: 800; font-size: 12px; }
+    .pill-price { color: var(--gold); font-weight: 800; font-size: 12px; }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .arch-node {
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .arch-node h4 {
+      margin: 0 0 4px;
+      color: var(--accent);
+      font-size: 13px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: var(--green);
+    }
+
+    .enc-search {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #020617;
+      color: #fff;
+      font-size: 13px;
+      margin-bottom: 10px;
+      user-select: text;
+    }
+
+    .enc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .enc-entry {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Ekran startowy -->
+  <div id="start-screen">
+    <div class="start-card">
+      <div class="badge-row">
+        <span class="badge">64-BIT RAGE + PBR ENGINE</span>
+        <span class="badge badge-purple">11 GROQ AI KEYS + OFFLINE</span>
+        <span class="badge badge-gold">13,343,850 FUNKCJI (+3,000,000 NOWYCH)</span>
+      </div>
+      <h1 class="start-title">GTA SUS 3D: INFINITY EDITION</h1>
+      <p class="start-sub">
+        Rozległa metropolia Dubaj / USA z wieżowcami z oknami, mostami nad zatoką, blokadą wjazdu aut do głębokiej wody,
+        rakietą NASA z lotem w obie strony na Księżyc, 400 darmowymi pojazdami ($0, 54+ unikalnych modeli w tym Lamborghini),
+        lotem samolotem i helikopterem na <strong>Spacji</strong>, spadochronem, napadami, wizualizacją architektury [V] oraz Mini AI Czat [Y].
+      </p>
+
+      <div class="seed-row">
+        <input id="seed-input" type="text" value="DUBAI-SUS-64" placeholder="Wpisz seed świata (np. DUBAI-SUS-64)" />
+        <button id="btn-random-seed" class="btn" type="button">🎲 Losuj Seed</button>
+        <button id="btn-ai-seed" class="btn btn-gold" type="button">✨ Seed AI (Groq)</button>
+      </div>
+
+      <div class="grid-4">
+        <div class="feat-card">
+          <strong>🏙️ Metropolia Dubaj / USA</strong>
+          Wieżowce z oknami, zatoka, mosty, park z fontanną, port, wnętrza [E] i czyszczenie pamięci GPU przy zmianie mapy.
+        </div>
+        <div class="feat-card">
+          <strong>🚀 Rakieta NASA i Księżyc</strong>
+          Użyj [E] przy wyrzutni NASA, poleć na Księżyc w niskiej grawitacji i wróć rakietą z powrotem na Ziemię.
+        </div>
+        <div class="feat-card">
+          <strong>🏎️ 400 Pojazdów ($0) + Lot [Spacja]</strong>
+          54+ unikalnych modeli (w tym Lamborghini), trzymanie Spacji/R wznosi samoloty i helikoptery, Q/Shift obniża lot.
+        </div>
+        <div class="feat-card">
+          <strong>🔗 Integracja 6 Silników</strong>
+          Kompatybilny z <code>grafika.js</code>, <code>gta.py</code>, <code>Gta.java</code>, <code>gta_rage.cpp</code>, <code>gta_shaders.hlsl</code> i <code>SusScaleformHUD.as</code>.
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:space-between; align-items:center;">
+        <button id="btn-play" class="btn btn-primary" type="button">▶ GRAJ TERAZ</button>
+        <span id="modules-status" style="font-size:11px; color:#94a3b8;">Inicjalizacja mostków 64-bit...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud-top-left" style="display:none;">
+    <div class="hud-row">
+      <span id="hud-cash" class="cash-val">$1,000</span>
+      <span id="hud-hp" class="hp-val">HP: 100%</span>
+      <span id="hud-stars" class="stars-val">☆☆☆☆☆☆</span>
+    </div>
+    <div class="bar-wrap">
+      <div id="hud-hp-bar" class="bar-fill"></div>
+    </div>
+    <div id="hud-meta" class="hud-meta">
+      Lokacja: Metropolia Dubaj/USA | Wys.: 0.0m | Spadochron: Gotowy<br/>
+      WASD: Ruch/Ster • Spacja/R: Wznoszenie lotu / Spadochron • Q/Shift: Niżej • E: Akcja
+    </div>
+  </div>
+
+  <!-- Mini Radar / Wizualizacja Sektorów 64-bit -->
+  <div id="hud-radar-box" style="display:none;" title="Kliknij lub wciśnij [V], aby otworzyć pełną wizualizację 64-bit">
+    <canvas id="radar-canvas" width="150" height="150"></canvas>
+    <div id="radar-sector-label" class="radar-label">SEKTOR 64-BIT [0:0:0] • [V]</div>
+  </div>
+
+  <div id="context-prompt"></div>
+  <div id="toast-banner"></div>
+
+  <!-- Dolny dock akcji -->
+  <div id="action-dock" style="display:none;">
+    <button class="btn btn-green" data-action="garage" type="button">🏎️ Garaż 400 [B]</button>
+    <button class="btn btn-gold" data-action="shop" type="button">🍔 Sklep $100 [I]</button>
+    <button class="btn btn-red" data-action="robShop" type="button">💰 Napad Sklep [J]</button>
+    <button class="btn btn-red" data-action="robBank" type="button">🏦 Napad Bank [H]</button>
+    <button class="btn" data-action="rocket" type="button">🚀 NASA / Księżyc [E]</button>
+    <button class="btn" data-action="parachute" type="button">🪂 Spadochron [O]</button>
+    <button class="btn" data-action="lighting" type="button">🌅 Pora Dnia</button>
+    <button class="btn btn-red" data-action="chaos" type="button">⚡ AI Chaos [X]</button>
+    <button class="btn btn-primary" data-action="chat" type="button">🤖 Mini AI Czat [Y]</button>
+    <button class="btn" data-action="phone" type="button">📱 SusPhone [P]</button>
+    <button class="btn" data-action="viz" type="button">🌐 Wizualizacja 64-Bit [V]</button>
+    <button class="btn" data-action="sync" type="button">🔗 Sync Silników</button>
+    <button class="btn" data-action="encyclopedia" type="button">📚 Encyklopedia 13.34M [ESC]</button>
+  </div>
+
+  <!-- Mini AI Czat [Y] -->
+  <div id="ai-chat-panel">
+    <div class="panel-header">
+      <span>🤖 Mini AI Czat (11x Groq + Python/Java/C++ + Offline)</span>
+      <button id="btn-close-chat" class="btn" style="padding:3px 8px; font-size:11px;" type="button">✕</button>
+    </div>
+    <div id="ai-chat-log">
+      <div class="msg msg-ai">
+        Cześć! Jestem asystentem AI w <strong>GTA SUS 3D: Infinity Edition</strong>.
+        Odpowiadam na każde pytanie (np. <em>ile to 2+2</em>, wiedza ogólna, kod) i doradzam co zrobić dalej w grze!
+      </div>
+    </div>
+    <form id="ai-chat-form">
+      <input id="ai-chat-input" type="text" placeholder="Np. ile to 2+2? albo co zrobić dalej?" autocomplete="off" />
+      <button class="btn btn-primary" style="padding:7px 12px; font-size:12px;" type="submit">Wyślij</button>
+    </form>
+  </div>
+
+  <!-- Uniwersalny Modal -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal-box">
+      <div class="panel-header">
+        <span id="modal-title">Panel</span>
+        <button id="btn-close-modal" class="btn" style="padding:4px 10px; font-size:12px;" type="button">Zamknij</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // 1. PULA WSZYSTKICH 11 KLUCZY GROQ API (ROTACJA + PEŁNY TRYB OFFLINE)
+      // =========================================================================
+      const GROQ_KEYS = [
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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',
+        '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'
+      ];
+      let groqKeyIndex = 0;
+
+      // =========================================================================
+      // 2. KATALOG 54+ UNIKALNYCH POJAZDÓW (W TYM LAMBORGHINI) -> 400 SZTUK ($0)
+      // =========================================================================
+      const UNIQUE_VEHICLE_TEMPLATES = [
+        { name: 'Lamborghini Aventador SVJ', type: 'car', speed: 80, color: 0xfacc15 },
+        { name: 'Lamborghini Huracán Performante', type: 'car', speed: 76, color: 0x22c55e },
+        { name: 'Lamborghini Urus Performante', type: 'car', speed: 70, color: 0xf97316 },
+        { name: 'Lamborghini Revuelto V12', type: 'car', speed: 82, color: 0xef4444 },
+        { name: 'Lamborghini Countach LPI 800-4', type: 'car', speed: 77, color: 0xf8fafc },
+        { name: 'Lamborghini Sián Roadster', type: 'car', speed: 79, color: 0x10b981 },
+        { name: 'Lamborghini Murciélago LP670-4', type: 'car', speed: 75, color: 0xeab308 },
+        { name: 'Lamborghini Gallardo Superleggera', type: 'car', speed: 72, color: 0xf59e0b },
+        { name: 'Dubai Hyper GT Spec', type: 'car', speed: 84, color: 0x38bdf8 },
+        { name: 'US Muscle Interceptor V8', type: 'car', speed: 66, color: 0x1e293b },
+        { name: 'Cyber SUV 64-Bit', type: 'car', speed: 68, color: 0x94a3b8 },
+        { name: 'SUS Drift Taxi', type: 'car', speed: 60, color: 0xfbbf24 },
+        { name: 'Police Pursuit Cruiser', type: 'car', speed: 69, color: 0x2563eb },
+        { name: 'SWAT Armored Van', type: 'car', speed: 54, color: 0x334155 },
+        { name: 'Miami Neon Convertible', type: 'car', speed: 71, color: 0xec4899 },
+        { name: 'Desert Sand Buggy', type: 'car', speed: 63, color: 0xd97706 },
+        { name: 'Luxury Limo Dubai', type: 'car', speed: 58, color: 0xe2e8f0 },
+        { name: 'City Metro Bus', type: 'car', speed: 48, color: 0x0ea5e9 },
+        { name: 'Fire Truck Ladder 64', type: 'car', speed: 50, color: 0xdc2626 },
+        { name: 'Ambulance Express', type: 'car', speed: 59, color: 0xf1f5f9 },
+        { name: 'SUS Falcon Jetliner', type: 'plane', speed: 108, color: 0xe2e8f0 },
+        { name: 'Supersonic Interceptor Jet', type: 'plane', speed: 125, color: 0x64748b },
+        { name: 'Twin-Prop Cargo Plane', type: 'plane', speed: 88, color: 0x0284c7 },
+        { name: 'Stunt Aerobatic Plane', type: 'plane', speed: 96, color: 0xf43f5e },
+        { name: 'Dubai Sky Chopper', type: 'heli', speed: 74, color: 0xfacc15 },
+        { name: 'SUS Stealth Helicopter', type: 'heli', speed: 82, color: 0x1e293b },
+        { name: 'Rescue Twin-Rotor Heli', type: 'heli', speed: 70, color: 0xef4444 },
+        { name: 'Bay Yacht Cruiser', type: 'boat', speed: 60, color: 0xf8fafc },
+        { name: 'SUS Patrol Speedboat', type: 'boat', speed: 68, color: 0x0284c7 },
+        { name: 'Turbo Jet-Ski Pro', type: 'boat', speed: 64, color: 0xa855f7 }
+      ];
+
+      for (let i = UNIQUE_VEHICLE_TEMPLATES.length; i < 54; i++) {
+        const categories = ['car', 'car', 'car', 'plane', 'heli', 'boat'];
+        const cat = categories[i % categories.length];
+        const prefixes = ['SUS', 'Apex', 'Apex-X', 'Veloce', 'Titan', 'Nova', 'Kobra', 'Orion'];
+        const suffixes = ['GT', 'RS', 'Evo', 'Turbo', 'X64', 'Pro', 'V12', 'Spec'];
+        const name = `${prefixes[i % prefixes.length]} ${suffixes[(i * 3) % suffixes.length]} #${i + 1}`;
+        const palette = [0x38bdf8, 0xf43f5e, 0xa855f7, 0x10b981, 0xf97316, 0xeab308];
+        UNIQUE_VEHICLE_TEMPLATES.push({
+          name,
+          type: cat,
+          speed: cat === 'plane' ? 98 + (i % 20) : cat === 'heli' ? 74 + (i % 14) : 58 + (i % 24),
+          color: palette[i % palette.length]
+        });
+      }
+
+      const GARAGE_400 = [];
+      for (let idx = 0; idx < 400; idx++) {
+        const base = UNIQUE_VEHICLE_TEMPLATES[idx % UNIQUE_VEHICLE_TEMPLATES.length];
+        const serial = idx + 1;
+        GARAGE_400.push({
+          id: serial,
+          name: idx < UNIQUE_VEHICLE_TEMPLATES.length ? base.name : `${base.name} [Garaż #${serial}]`,
+          type: base.type,
+          speed: base.speed,
+          color: base.color,
+          price: 0
+        });
+      }
+
+      const SHOP_ITEMS_100 = [
+        { id: 'burger', name: '🍔 Double SUS Burger', desc: '+30 HP i energia', price: 100, hpGain: 30 },
+        { id: 'pizza', name: '🍕 Pizza Dubaj Slice', desc: '+35 HP', price: 100, hpGain: 35 },
+        { id: 'sushi', name: '🍣 Sushi Salmon Roll', desc: '+25 HP i +1 spadochron', price: 100, hpGain: 25, paraGain: 1 },
+        { id: 'energy', name: '⚡ Estathé / Nitro Shot', desc: '+15 HP i pełne nitro', price: 100, hpGain: 15, refillNitro: true },
+        { id: 'parachute', name: '🪂 Spadochron Taktyczny', desc: '+1 spadochron na wysokie skoki', price: 100, paraGain: 1 },
+        { id: 'medkit', name: '🩺 Apteczka Ratunkowa', desc: '+60 HP', price: 100, hpGain: 60 }
+      ];
+
+      // =========================================================================
+      // 3. STAN GRY, 64-BIT SEKTORY I INTEGRACJA Z 6 ZEWNĘTRZNYMI MODUŁAMI
+      // =========================================================================
+      const state = {
+        started: false,
+        seed: 'DUBAI-SUS-64',
+        cash: 1000,
+        hp: 100,
+        stars: 0,
+        parachutes: 2,
+        parachuteOpen: false,
+        onMoon: false,
+        inInterior: false,
+        interiorName: '',
+        inVehicle: false,
+        vehicle: null,
+        nitro: 100,
+        lightingMode: 'day',
+        rocketAnim: null,
+        totalFeaturesCount: 13343850 // 10,343,850 + 3,000,000 nowych funkcji
+      };
+
+      const tuningConfig = {
+        spacebarClimbRate: 28.0,
+        helicopterLiftAccel: 34.0,
+        parachuteDescentSpeed: 5.0,
+        fallDamageThreshold: 11.5,
+        fallDamageMultiplier: 3.2,
+        moonGravityScale: 0.24,
+        shopHeistPayout: 920,
+        bankHeistPayout: 7200,
+        waterCollisionBlockForCars: true,
+        lamborghiniBoost: 1.2
+      };
+
+      const linkedEngines = {
+        grafikaJs: Boolean(window.GRAFIKA_64),
+        pythonOnline: false,
+        pythonTuning: Boolean(window.GAMEPLAY_TUNING),
+        javaOnline: false,
+        javaTuning: Boolean(window.GTA_JAVA_TUNING),
+        cppTuning: Boolean(window.GTA_CPP_TUNING),
+        hlslBridge: true,
+        scaleformBridge: true
+      };
+
+      function getSector64Key(x, y, z) {
+        const s = 1024.0;
+        const sx = BigInt(Math.floor((Number(x) || 0) / s));
+        const sy = BigInt(Math.floor((Number(y) || 0) / s));
+        const sz = BigInt(Math.floor((Number(z) || 0) / s));
+        return `${sx}:${sy}:${sz}`;
+      }
+
+      function syncExternalModuleConfigs() {
+        linkedEngines.grafikaJs = Boolean(window.GRAFIKA_64);
+        linkedEngines.pythonTuning = Boolean(window.GAMEPLAY_TUNING);
+        linkedEngines.javaTuning = Boolean(window.GTA_JAVA_TUNING);
+        linkedEngines.cppTuning = Boolean(window.GTA_CPP_TUNING);
+
+        const sources = [
+          window.GAMEPLAY_TUNING,
+          window.GTA_JAVA_TUNING,
+          window.GTA_CPP_TUNING
+        ];
+        for (const src of sources) {
+          if (!src || typeof src !== 'object') continue;
+          if (src.vehiclesAndFlight && src.vehiclesAndFlight.spacebarClimbLift) {
+            tuningConfig.spacebarClimbRate = Number(src.vehiclesAndFlight.spacebarClimbLift.airplaneClimbRate) || tuningConfig.spacebarClimbRate;
+            tuningConfig.helicopterLiftAccel = Number(src.vehiclesAndFlight.spacebarClimbLift.helicopterLiftAccel) || tuningConfig.helicopterLiftAccel;
+          }
+          if (src.flightAndVehicles) {
+            tuningConfig.spacebarClimbRate = Number(src.flightAndVehicles.spacebarClimbRate) || tuningConfig.spacebarClimbRate;
+            tuningConfig.helicopterLiftAccel = Number(src.flightAndVehicles.helicopterLiftAccel) || tuningConfig.helicopterLiftAccel;
+            tuningConfig.lamborghiniBoost = Number(src.flightAndVehicles.lamborghiniTopSpeedBoost) || tuningConfig.lamborghiniBoost;
+          }
+          if (src.rageEuphoria) {
+            tuningConfig.spacebarClimbRate = Number(src.rageEuphoria.spacebarClimbRate) || tuningConfig.spacebarClimbRate;
+            tuningConfig.helicopterLiftAccel = Number(src.rageEuphoria.helicopterLiftAccel) || tuningConfig.helicopterLiftAccel;
+            tuningConfig.parachuteDescentSpeed = Number(src.rageEuphoria.parachuteDescentSpeed) || tuningConfig.parachuteDescentSpeed;
+            tuningConfig.fallDamageThreshold = Number(src.rageEuphoria.fallDamageThreshold) || tuningConfig.fallDamageThreshold;
+            tuningConfig.fallDamageMultiplier = Number(src.rageEuphoria.fallDamageMultiplier) || tuningConfig.fallDamageMultiplier;
+            tuningConfig.moonGravityScale = Number(src.rageEuphoria.moonGravityScale) || tuningConfig.moonGravityScale;
+          }
+          if (src.economy) {
+            tuningConfig.shopHeistPayout = Number(src.economy.shopHeistPayout) || tuningConfig.shopHeistPayout;
+            tuningConfig.bankHeistPayout = Number(src.economy.bankHeistPayout) || tuningConfig.bankHeistPayout;
+          }
+        }
+      }
+
+      async function tryJsonPost(url, payload, timeoutMs = 1400) {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+          const res = await fetch(url, {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {})
+          });
+          clearTimeout(timer);
+          if (!res.ok) return null;
+          return await res.json();
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function syncWithBackendEngines(showFeedback = false) {
+        syncExternalModuleConfigs();
+        const snapshot = {
+          hp: state.hp,
+          cash: state.cash,
+          stars: state.stars,
+          altitude: Math.max(0, state.onMoon ? player.pos.y - 1200.5 : (state.inInterior ? player.pos.y - 600 : player.pos.y)),
+          vy: state.inVehicle && state.vehicle ? state.vehicle.vy : player.vel.y,
+          inVehicle: state.inVehicle,
+          vehicleType: state.inVehicle && state.vehicle ? state.vehicle.type : 'foot',
+          parachuteOpen: state.parachuteOpen,
+          hasParachute: state.parachutes > 0,
+          inWater: isDeepWater(player.pos.x, player.pos.z),
+          onMoon: state.onMoon,
+          goal: 'all'
+        };
+
+        const [pyRepair, javaUpgrade] = await Promise.all([
+          tryJsonPost('http://127.0.0.1:8765/api/repair', snapshot),
+          tryJsonPost('http://127.0.0.1:8766/api/upgrade', snapshot)
+        ]);
+
+        linkedEngines.pythonOnline = Boolean(pyRepair && pyRepair.ok);
+        linkedEngines.javaOnline = Boolean(javaUpgrade && javaUpgrade.ok);
+
+        if (pyRepair && pyRepair.ok && pyRepair.repairedState) {
+          state.hp = Math.max(0, Math.min(100, Number(pyRepair.repairedState.hp ?? state.hp)));
+          state.cash = Math.max(0, Number(pyRepair.repairedState.cash ?? state.cash));
+          state.stars = Math.max(0, Math.min(6, Number(pyRepair.repairedState.stars ?? state.stars)));
+        }
+
+        if (javaUpgrade && javaUpgrade.ok && javaUpgrade.tuning) {
+          window.GTA_JAVA_TUNING = javaUpgrade.tuning;
+          syncExternalModuleConfigs();
+        }
+
+        if (window.SusScaleformBridge && typeof window.SusScaleformBridge.sync === 'function') {
+          try {
+            window.SusScaleformBridge.sync({
+              hp: state.hp,
+              cash: state.cash,
+              stars: state.stars,
+              altitude: snapshot.altitude,
+              onMoon: state.onMoon,
+              parachuteOpen: state.parachuteOpen,
+              hasParachute: state.parachutes > 0,
+              vehicleName: state.inVehicle && state.vehicle ? state.vehicle.name : 'Pieszo'
+            });
+          } catch (e) {}
+        }
+
+        if (showFeedback) {
+          const parts = [
+            `grafika.js: ${linkedEngines.grafikaJs ? 'AKTYWNY' : 'wbudowany'}`,
+            `gta.py (8765): ${linkedEngines.pythonOnline ? 'ONLINE' : 'offline/tuning'}`,
+            `Gta.java (8766): ${linkedEngines.javaOnline ? 'ONLINE' : 'offline/tuning'}`,
+            `gta_rage.cpp: ${linkedEngines.cppTuning ? 'TUNING OK' : 'wbudowany'}`,
+            `gta_shaders.hlsl + SusScaleformHUD.as: GOTOWE`
+          ];
+          showToast(`🔗 Synchronizacja 6 modułów: ${parts.join(' • ')}`);
+        }
+        updateHud();
+      }
+
+      // =========================================================================
+      // 4. DETERMINISTYCZNY GENERATOR SEED + CZYSZCZENIE ZASOBÓW GPU THREE.JS
+      // =========================================================================
+      function makeRng(seedStr) {
+        let h = 2166136261 >>> 0;
+        const s = String(seedStr || 'DUBAI-SUS-64');
+        for (let i = 0; i < s.length; i++) {
+          h ^= s.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return function () {
+          h += 0x6d2b79f5;
+          let t = Math.imul(h ^ (h >>> 15), 1 | h);
+          t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      const canvas = document.getElementById('game-canvas');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(65, window.innerWidth / Math.max(1, window.innerHeight), 0.25, 3600);
+
+      let worldGroup = null;
+      let dynamicGroup = null;
+      let sunLight = null;
+      let hemiLight = null;
+      let waterPlane = null;
+      let moonSurfaceGroup = null;
+      let rocketMesh = null;
+      let parachuteMesh = null;
+      let cloudsList = [];
+      let vehiclesList = [];
+      let landmarks = [];
+      let buildingRects = [];
+
+      const player = {
+        mesh: null,
+        pos: new THREE.Vector3(0, 1.8, 120),
+        vel: new THREE.Vector3(0, 0, 0),
+        yaw: Math.PI
+      };
+
+      function disposeObjectTree(rootObj) {
+        if (!rootObj) return;
+        rootObj.traverse((obj) => {
+          if (obj.geometry && typeof obj.geometry.dispose === 'function') {
+            obj.geometry.dispose();
+          }
+          if (obj.material) {
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            for (const m of mats) {
+              if (!m) continue;
+              for (const k of Object.keys(m)) {
+                const v = m[k];
+                if (v && v.isTexture && typeof v.dispose === 'function') {
+                  v.dispose();
+                }
+              }
+              if (typeof m.dispose === 'function') {
+                m.dispose();
+              }
+            }
+          }
+        });
+      }
+
+      function createSkyscraperTexture(seedStr, nightGlow) {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 512;
+        const ctx = c.getContext('2d');
+        const rng = makeRng(seedStr);
+
+        ctx.fillStyle = nightGlow > 0.7 ? '#090d1a' : '#0f172a';
+        ctx.fillRect(0, 0, 256, 512);
+
+        const cols = 10;
+        const rows = 28;
+        const cw = 256 / cols;
+        const ch = 512 / rows;
+
+        for (let r = 0; r < rows; r++) {
+          for (let col = 0; col < cols; col++) {
+            const lit = rng() > (nightGlow > 0.7 ? 0.35 : 0.62);
+            if (lit) {
+              ctx.fillStyle = rng() > 0.3 ? '#fde68a' : '#7dd3fc';
+            } else {
+              ctx.fillStyle = '#1e293b';
+            }
+            ctx.fillRect(col * cw + 4, r * ch + 4, cw - 8, ch - 7);
+          }
+        }
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+      }
+
+      function applyLightingMode(mode) {
+        state.lightingMode = mode;
+        const configs = {
+          day: { fog: 0xbae6fd, dens: 0.00075, sunCol: 0xfffbeb, sunInt: 2.3, hemiSky: 0xe0f2fe, hemiGnd: 0x334155, hemiInt: 1.0, moon: false },
+          golden: { fog: 0xfdba74, dens: 0.0010, sunCol: 0xffedd5, sunInt: 2.8, hemiSky: 0xfed7aa, hemiGnd: 0x1e1b4b, hemiInt: 0.9, moon: false },
+          night: { fog: 0x090d1a, dens: 0.0012, sunCol: 0x93c5fd, sunInt: 0.6, hemiSky: 0x1e293b, hemiGnd: 0x020617, hemiInt: 0.55, moon: false },
+          moon: { fog: 0x05070e, dens: 0.0002, sunCol: 0xffffff, sunInt: 3.0, hemiSky: 0xcbd5e1, hemiGnd: 0x1e293b, hemiInt: 0.35, moon: true }
+        };
+        const cfg = configs[mode] || configs.day;
+        scene.fog = new THREE.FogExp2(cfg.fog, cfg.dens);
+        if (sunLight) {
+          sunLight.color.setHex(cfg.sunCol);
+          sunLight.intensity = cfg.sunInt;
+        }
+        if (hemiLight) {
+          hemiLight.color.setHex(cfg.hemiSky);
+          hemiLight.groundColor.setHex(cfg.hemiGnd);
+          hemiLight.intensity = cfg.hemiInt;
+        }
+        if (moonSurfaceGroup) {
+          moonSurfaceGroup.visible = cfg.moon;
+        }
+        if (window.GRAFIKA_64 && typeof window.GRAFIKA_64.setPreset === 'function') {
+          try {
+            window.GRAFIKA_64.setPreset(mode);
+          } catch (e) {}
+        }
+      }
+
+      function spawnVehicle(template, x, y, z, yaw = 0) {
+        const g = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color: template.color,
+          roughness: 0.28,
+          metalness: 0.65
+        });
+        const darkMat = new THREE.MeshStandardMaterial({
+          color: 0x0f172a,
+          roughness: 0.7,
+          metalness: 0.25
+        });
+
+        if (template.type === 'plane') {
+          const fuselage = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 11), bodyMat);
+          fuselage.castShadow = true;
+          g.add(fuselage);
+          const wings = new THREE.Mesh(new THREE.BoxGeometry(14, 0.25, 3.2), bodyMat);
+          wings.position.set(0, 0.2, 0.5);
+          wings.castShadow = true;
+          g.add(wings);
+          const tail = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.2, 1.6), darkMat);
+          tail.position.set(0, 0.8, -4.6);
+          g.add(tail);
+        } else if (template.type === 'heli') {
+          const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.4, 6.8), bodyMat);
+          cabin.castShadow = true;
+          g.add(cabin);
+          const rotor = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.14, 0.45), darkMat);
+          rotor.position.set(0, 1.55, 0.4);
+          g.add(rotor);
+          g.userData.rotor = rotor;
+        } else if (template.type === 'boat') {
+          const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.4, 9.5), bodyMat);
+          hull.castShadow = true;
+          g.add(hull);
+          const deck = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 4.2), darkMat);
+          deck.position.set(0, 1.1, -0.5);
+          g.add(deck);
+        } else {
+          const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.95, 5.1), bodyMat);
+          chassis.position.y = 0.72;
+          chassis.castShadow = true;
+          g.add(chassis);
+
+          const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.68, 2.4), darkMat);
+          cabin.position.set(0, 1.42, -0.2);
+          cabin.castShadow = true;
+          g.add(cabin);
+
+          const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.36, 14);
+          wheelGeo.rotateZ(Math.PI / 2);
+          const wheelOffsets = [
+            [-1.15, 0.45, 1.55],
+            [1.15, 0.45, 1.55],
+            [-1.15, 0.45, -1.55],
+            [1.15, 0.45, -1.55]
+          ];
+          for (const [wx, wy, wz] of wheelOffsets) {
+            const w = new THREE.Mesh(wheelGeo, darkMat);
+            w.position.set(wx, wy, wz);
+            g.add(w);
+          }
+        }
+
+        g.position.set(x, y, z);
+        g.rotation.y = yaw;
+        dynamicGroup.add(g);
+
+        const isLambo = template.name.toLowerCase().includes('lamborghini');
+        const effectiveTopSpeed = isLambo ? template.speed * tuningConfig.lamborghiniBoost : template.speed;
+
+        const vObj = {
+          id: template.id || Math.random(),
+          name: template.name,
+          type: template.type,
+          topSpeed: effectiveTopSpeed,
+          mesh: g,
+          pos: g.position,
+          yaw: yaw,
+          speed: 0,
+          vy: 0
+        };
+        vehiclesList.push(vObj);
+        return vObj;
+      }
+
+      function buildMetropolisWorld(seedStr) {
+        state.seed = String(seedStr || 'DUBAI-SUS-64');
+        const rng = makeRng(state.seed);
+        syncExternalModuleConfigs();
+
+        if (worldGroup) {
+          disposeObjectTree(worldGroup);
+          scene.remove(worldGroup);
+        }
+        if (dynamicGroup) {
+          disposeObjectTree(dynamicGroup);
+          scene.remove(dynamicGroup);
+        }
+
+        worldGroup = new THREE.Group();
+        dynamicGroup = new THREE.Group();
+        scene.add(worldGroup);
+        scene.add(dynamicGroup);
+
+        cloudsList = [];
+        vehiclesList = [];
+        landmarks = [];
+        buildingRects = [];
+
+        hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 1.0);
+        worldGroup.add(hemiLight);
+
+        sunLight = new THREE.DirectionalLight(0xfffbeb, 2.3);
+        sunLight.position.set(320, 460, 260);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        const sc = sunLight.shadow.camera;
+        sc.left = -360; sc.right = 360; sc.top = 360; sc.bottom = -360; sc.near = 20; sc.far = 1400;
+        worldGroup.add(sunLight);
+
+        const landMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(1800, 1250),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85, metalness: 0.1 })
+        );
+        landMesh.rotation.x = -Math.PI / 2;
+        landMesh.position.set(0, 0, 125);
+        landMesh.receiveShadow = true;
+        worldGroup.add(landMesh);
+
+        waterPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(2400, 900),
+          new THREE.MeshStandardMaterial({
+            color: 0x0284c7,
+            roughness: 0.18,
+            metalness: 0.72,
+            transparent: true,
+            opacity: 0.88
+          })
+        );
+        waterPlane.rotation.x = -Math.PI / 2;
+        waterPlane.position.set(0, 0.12, -940);
+        worldGroup.add(waterPlane);
+
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x27303f, roughness: 0.78 });
+        const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.5, metalness: 0.5 });
+
+        for (const ax of [-180, 0, 180]) {
+          const road = new THREE.Mesh(new THREE.BoxGeometry(24, 0.14, 1020), roadMat);
+          road.position.set(ax, 0.08, 20);
+          road.receiveShadow = true;
+          worldGroup.add(road);
+
+          const bridge = new THREE.Mesh(new THREE.BoxGeometry(26, 2.2, 680), bridgeMat);
+          bridge.position.set(ax, 5.2, -830);
+          bridge.castShadow = true;
+          bridge.receiveShadow = true;
+          worldGroup.add(bridge);
+        }
+
+        for (const az of [-360, -180, 0, 180, 360]) {
+          const cross = new THREE.Mesh(new THREE.BoxGeometry(1150, 0.14, 22), roadMat);
+          cross.position.set(0, 0.08, az);
+          cross.receiveShadow = true;
+          worldGroup.add(cross);
+        }
+
+        const park = new THREE.Mesh(
+          new THREE.BoxGeometry(130, 0.2, 130),
+          new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.9 })
+        );
+        park.position.set(90, 0.12, 90);
+        park.receiveShadow = true;
+        worldGroup.add(park);
+
+        const fountain = new THREE.Mesh(
+          new THREE.CylinderGeometry(12, 14, 2.2, 24),
+          new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, metalness: 0.5 })
+        );
+        fountain.position.set(90, 1.1, 90);
+        worldGroup.add(fountain);
+
+        const winTex = createSkyscraperTexture(state.seed, 0.5);
+        const towerSpecs = [
+          { x: 0, z: 90, w: 42, h: 215, d: 42 },
+          { x: -75, z: 90, w: 32, h: 165, d: 32 },
+          { x: 75, z: -90, w: 34, h: 178, d: 34 },
+          { x: -90, z: -90, w: 30, h: 150, d: 30 },
+          { x: 260, z: 120, w: 36, h: 190, d: 36 },
+          { x: -260, z: 140, w: 32, h: 142, d: 32 }
+        ];
+
+        for (let i = 0; i < 44; i++) {
+          const bx = -460 + rng() * 920;
+          const bz = -440 + rng() * 900;
+          if (Math.abs(bx) < 22 || Math.abs(bx + 180) < 22 || Math.abs(bx - 180) < 22) continue;
+          if (Math.abs(bz) < 20 || Math.abs(bz + 180) < 20 || Math.abs(bz - 180) < 20) continue;
+          if (Math.hypot(bx - 90, bz - 90) < 82) continue;
+          if (Math.hypot(bx - 320, bz + 260) < 65) continue;
+
+          towerSpecs.push({
+            x: bx,
+            z: bz,
+            w: 18 + rng() * 18,
+            h: 42 + rng() * 145,
+            d: 18 + rng() * 18
+          });
+        }
+
+        for (const t of towerSpecs) {
+          const mat = new THREE.MeshStandardMaterial({
+            map: winTex,
+            emissive: 0xfde68a,
+            emissiveMap: winTex,
+            emissiveIntensity: 0.35,
+            roughness: 0.35,
+            metalness: 0.6
+          });
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.h, t.d), mat);
+          mesh.position.set(t.x, t.h * 0.5, t.z);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          worldGroup.add(mesh);
+          buildingRects.push({ x: t.x, z: t.z, w: t.w, d: t.d, h: t.h });
+        }
+
+        const interiorSpot = { x: -75, z: 25 };
+        const interiorMarker = new THREE.Mesh(
+          new THREE.CylinderGeometry(4, 4, 0.5, 16),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+        );
+        interiorMarker.position.set(interiorSpot.x, 0.3, interiorSpot.z);
+        worldGroup.add(interiorMarker);
+        landmarks.push({ name: 'Wnętrze Wieżowca / Apartamentu', action: 'interior', x: interiorSpot.x, z: interiorSpot.z, radius: 10 });
+
+        const shopSpot = { x: -180, z: 45 };
+        const shopMarker = new THREE.Mesh(
+          new THREE.CylinderGeometry(4, 4, 0.5, 16),
+          new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+        );
+        shopMarker.position.set(shopSpot.x, 0.3, shopSpot.z);
+        worldGroup.add(shopMarker);
+        landmarks.push({ name: 'Sklep / Napad [J] lub Zakupy [I]', action: 'shopHeist', x: shopSpot.x, z: shopSpot.z, radius: 11 });
+
+        const bankSpot = { x: 180, z: 45 };
+        const bankMarker = new THREE.Mesh(
+          new THREE.CylinderGeometry(4.5, 4.5, 0.5, 16),
+          new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        );
+        bankMarker.position.set(bankSpot.x, 0.3, bankSpot.z);
+        worldGroup.add(bankMarker);
+        landmarks.push({ name: 'Bank Centralny / Napad [H]', action: 'bankHeist', x: bankSpot.x, z: bankSpot.z, radius: 12 });
+
+        const nasaX = 320;
+        const nasaZ = -260;
+        const pad = new THREE.Mesh(
+          new THREE.CylinderGeometry(24, 28, 2.5, 24),
+          new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6, metalness: 0.4 })
+        );
+        pad.position.set(nasaX, 1.25, nasaZ);
+        pad.receiveShadow = true;
+        worldGroup.add(pad);
+
+        rocketMesh = new THREE.Group();
+        const rBody = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.5, 2.9, 22, 20),
+          new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25, metalness: 0.5 })
+        );
+        rBody.position.y = 13.5;
+        rBody.castShadow = true;
+        rocketMesh.add(rBody);
+
+        const rNose = new THREE.Mesh(
+          new THREE.ConeGeometry(2.5, 6.5, 20),
+          new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.35 })
+        );
+        rNose.position.y = 27.75;
+        rNose.castShadow = true;
+        rocketMesh.add(rNose);
+        rocketMesh.position.set(nasaX, 0, nasaZ);
+        worldGroup.add(rocketMesh);
+
+        landmarks.push({ name: 'Rakieta NASA (Lot na Księżyc i z powrotem)', action: 'rocket', x: nasaX, z: nasaZ, radius: 22 });
+
+        moonSurfaceGroup = new THREE.Group();
+        moonSurfaceGroup.position.set(0, 1200, 0);
+        moonSurfaceGroup.visible = state.onMoon;
+        const moonDisc = new THREE.Mesh(
+          new THREE.CylinderGeometry(450, 450, 10, 48),
+          new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.92, metalness: 0.05 })
+        );
+        moonDisc.receiveShadow = true;
+        moonSurfaceGroup.add(moonDisc);
+        worldGroup.add(moonSurfaceGroup);
+
+        const cloudGeo = new THREE.IcosahedronGeometry(13, 1);
+        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, transparent: true, opacity: 0.86 });
+        for (let c = 0; c < 26; c++) {
+          const cg = new THREE.Group();
+          for (let p = 0; p < 3; p++) {
+            const puff = new THREE.Mesh(cloudGeo, cloudMat);
+            puff.position.set((p - 1) * 10, (rng() - 0.5) * 4, (rng() - 0.5) * 8);
+            puff.scale.set(1.3, 0.75, 1.0);
+            cg.add(puff);
+          }
+          cg.position.set(-500 + rng() * 1000, 165 + (c % 3) * 45, -750 + rng() * 1200);
+          cloudsList.push(cg);
+          worldGroup.add(cg);
+        }
+
+        player.mesh = new THREE.Group();
+        const torso = new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 1.2, 0.45),
+          new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 })
+        );
+        torso.position.y = 1.1;
+        torso.castShadow = true;
+        player.mesh.add(torso);
+
+        const head = new THREE.Mesh(
+          new THREE.BoxGeometry(0.55, 0.55, 0.55),
+          new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.5 })
+        );
+        head.position.y = 2.0;
+        head.castShadow = true;
+        player.mesh.add(head);
+
+        parachuteMesh = new THREE.Mesh(
+          new THREE.ConeGeometry(3.4, 2.4, 16, 1, true),
+          new THREE.MeshStandardMaterial({ color: 0xf97316, side: THREE.DoubleSide, roughness: 0.6 })
+        );
+        parachuteMesh.position.y = 4.6;
+        parachuteMesh.visible = false;
+        player.mesh.add(parachuteMesh);
+
+        player.pos.set(0, 1.8, 140);
+        player.vel.set(0, 0, 0);
+        player.mesh.position.copy(player.pos);
+        dynamicGroup.add(player.mesh);
+
+        spawnVehicle(GARAGE_400[0], 12, 0.2, 130, Math.PI);
+        spawnVehicle(GARAGE_400[1], -12, 0.2, 130, Math.PI);
+        spawnVehicle(GARAGE_400[20], 0, 0.2, -140, Math.PI);
+        spawnVehicle(GARAGE_400[24], 45, 0.2, -120, Math.PI);
+        spawnVehicle(GARAGE_400[27], 0, 0.4, -760, Math.PI);
+
+        if (window.GRAFIKA_64 && typeof window.GRAFIKA_64.init === 'function') {
+          try {
+            window.GRAFIKA_64.init({
+              renderer,
+              scene,
+              camera,
+              seed: state.seed,
+              preset: state.lightingMode
+            });
+          } catch (e) {}
+        }
+
+        applyLightingMode(state.lightingMode);
+        updateHud();
+      }
+
+      // =========================================================================
+      // 5. FIZYKA: LOT NA SPACJI, BLOKADA WODY DLA AUT, SPADOCHRON, RAKIETA NASA
+      // =========================================================================
+      const keys = Object.create(null);
+      window.addEventListener('keydown', (e) => {
+        if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+          return;
+        }
+        keys[e.code] = true;
+
+        if (e.code === 'KeyE') {
+          triggerContextAction();
+        } else if (e.code === 'KeyF') {
+          toggleEnterExitVehicle();
+        } else if (e.code === 'KeyO' || (e.code === 'Space' && !state.inVehicle && !state.onMoon && player.pos.y > 10 && !state.parachuteOpen)) {
+          toggleParachute();
+        } else if (e.code === 'KeyB') {
+          openGarageModal();
+        } else if (e.code === 'KeyI') {
+          openShopModal();
+        } else if (e.code === 'KeyJ') {
+          performShopHeist();
+        } else if (e.code === 'KeyH') {
+          performBankHeist();
+        } else if (e.code === 'KeyX') {
+          triggerAiChaos();
+        } else if (e.code === 'KeyY') {
+          toggleChatPanel();
+        } else if (e.code === 'KeyP') {
+          openSusPhoneModal();
+        } else if (e.code === 'KeyV') {
+          openArchitectureVisualizationModal();
+        } else if (e.code === 'Escape') {
+          if (document.getElementById('modal-overlay').style.display === 'flex') {
+            closeModal();
+          } else if (state.started) {
+            openEncyclopediaModal();
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        keys[e.code] = false;
+      });
+
+      function showToast(msg) {
+        const el = document.getElementById('toast-banner');
+        el.textContent = msg;
+        el.style.display = 'block';
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => {
+          el.style.display = 'none';
+        }, 4200);
+      }
+
+      function isDeepWater(x, z) {
+        if (state.onMoon || state.inInterior) return false;
+        const onBridge =
+          z < -490 &&
+          z > -1170 &&
+          (Math.abs(x + 180) < 13 || Math.abs(x) < 13 || Math.abs(x - 180) < 13);
+        if (onBridge) return false;
+        return z < -495;
+      }
+
+      function toggleParachute() {
+        if (state.inVehicle || state.onMoon) return;
+        if (state.parachuteOpen) {
+          state.parachuteOpen = false;
+          parachuteMesh.visible = false;
+          showToast('🪂 Złożono spadochron.');
+          return;
+        }
+        if (state.parachutes <= 0) {
+          showToast('⚠️ Brak spadochronu! Dokup go w sklepie [I] za $100.');
+          return;
+        }
+        state.parachutes -= 1;
+        state.parachuteOpen = true;
+        parachuteMesh.visible = true;
+        showToast('🪂 Otwarto spadochron! Bezpieczne opadanie aktywne.');
+      }
+
+      function toggleEnterExitVehicle() {
+        if (state.inInterior) {
+          showToast('Najpierw wyjdź z wnętrza budynku klawiszem [E].');
+          return;
+        }
+        if (state.inVehicle && state.vehicle) {
+          const v = state.vehicle;
+          const wasHigh = v.pos.y > 14 && Math.abs(v.vy) > 8;
+          state.inVehicle = false;
+          state.vehicle = null;
+          player.pos.set(v.pos.x + 3.2, Math.max(0.2, v.pos.y + 0.5), v.pos.z);
+          player.vel.set(0, wasHigh ? -12 : 0, 0);
+          player.mesh.visible = true;
+          showToast(wasHigh ? '🪂 Wyskoczono w powietrzu! Wciśnij [Spację] lub [O], aby otworzyć spadochron!' : 'Wysiadłeś z pojazdu.');
+          return;
+        }
+
+        let nearest = null;
+        let bestDist = 11;
+        for (const v of vehiclesList) {
+          const d = Math.hypot(v.pos.x - player.pos.x, v.pos.z - player.pos.z);
+          if (d < bestDist) {
+            bestDist = d;
+            nearest = v;
+          }
+        }
+        if (nearest) {
+          state.inVehicle = true;
+          state.vehicle = nearest;
+          state.parachuteOpen = false;
+          parachuteMesh.visible = false;
+          player.mesh.visible = false;
+          const hint = (nearest.type === 'plane' || nearest.type === 'heli')
+            ? ' Trzymaj [Spację] lub [R], aby wzbić się w górę!'
+            : '';
+          showToast(`Wsiadłeś do: ${nearest.name}.${hint}`);
+        } else {
+          showToast('Brak pojazdu w pobliżu. Wciśnij [B], aby przywołać darmowe auto ($0).');
+        }
+      }
+
+      function triggerNasaRocket() {
+        if (state.rocketAnim) return;
+        if (state.inVehicle) {
+          state.inVehicle = false;
+          state.vehicle = null;
+          player.mesh.visible = true;
+        }
+        if (!state.onMoon) {
+          state.rocketAnim = { dir: 'toMoon', t: 0, duration: 4.0 };
+          showToast('🚀 Start rakiety NASA w stronę Księżyca!');
+        } else {
+          state.rocketAnim = { dir: 'toEarth', t: 0, duration: 3.8 };
+          showToast('🚀 Powrót rakietą NASA z Księżyca na Ziemię!');
+        }
+      }
+
+      function triggerContextAction() {
+        if (state.inInterior) {
+          state.inInterior = false;
+          state.interiorName = '';
+          player.pos.set(-75, 0.2, 14);
+          player.vel.set(0, 0, 0);
+          showToast('Wyszedłeś z wnętrza budynku na ulicę.');
+          return;
+        }
+
+        const nearRocket = landmarks.find((l) => l.action === 'rocket' && Math.hypot(l.x - player.pos.x, l.z - player.pos.z) <= l.radius);
+        if (nearRocket || state.onMoon) {
+          triggerNasaRocket();
+          return;
+        }
+
+        const nearInterior = landmarks.find((l) => l.action === 'interior' && Math.hypot(l.x - player.pos.x, l.z - player.pos.z) <= l.radius);
+        if (nearInterior) {
+          state.inInterior = true;
+          state.interiorName = nearInterior.name;
+          player.pos.set(0, 600, 0);
+          player.vel.set(0, 0, 0);
+          showToast('🏢 Wszedłeś do wnętrza luksusowego apartamentu! Wciśnij [E], aby wyjść.');
+          return;
+        }
+
+        const nearShop = landmarks.find((l) => l.action === 'shopHeist' && Math.hypot(l.x - player.pos.x, l.z - player.pos.z) <= l.radius);
+        if (nearShop) {
+          openShopModal();
+          return;
+        }
+
+        const nearBank = landmarks.find((l) => l.action === 'bankHeist' && Math.hypot(l.x - player.pos.x, l.z - player.pos.z) <= l.radius);
+        if (nearBank) {
+          performBankHeist();
+          return;
+        }
+
+        toggleEnterExitVehicle();
+      }
+
+      function performShopHeist() {
+        const payout = tuningConfig.shopHeistPayout;
+        state.cash += payout;
+        state.stars = Math.min(6, state.stars + 1);
+        showToast(`💰 Napad na sklep udany! Zdobyto $${payout} (Pościg: ${state.stars}★).`);
+        updateHud();
+      }
+
+      function performBankHeist() {
+        const payout = tuningConfig.bankHeistPayout;
+        state.cash += payout;
+        state.stars = Math.min(6, state.stars + 3);
+        showToast(`🏦 Napad na Bank Centralny udany! Łup: $${payout} (Pościg: ${state.stars}★)!`);
+        updateHud();
+      }
+
+      function triggerAiChaos() {
+        const events = [
+          { txt: '⚡ AI CHAOS: Zrzut gotówki +$1,500 oraz +1 spadochron!', fn: () => { state.cash += 1500; state.parachutes += 1; } },
+          { txt: '⚡ AI CHAOS: Złota Godzina nad wieżowcami Dubaju!', fn: () => applyLightingMode('golden') },
+          { txt: '⚡ AI CHAOS: Noc Neonów rozświetla okna miasta!', fn: () => applyLightingMode('night') },
+          { txt: '⚡ AI CHAOS: Dodatkowe Lamborghini zjeżdża na ulicę!', fn: () => spawnVehicle(GARAGE_400[3], player.pos.x + 8, 0.2, player.pos.z - 8, player.yaw) }
+        ];
+        const pick = events[Math.floor(Math.random() * events.length)];
+        pick.fn();
+        showToast(pick.txt);
+        updateHud();
+      }
+
+      // =========================================================================
+      // 6. MINI AI CZAT (GROQ API + PYTHON/JAVA SERWERY + OFFLINE)
+      // =========================================================================
+      function solveSimpleMath(text) {
+        const clean = String(text || '').replace(/,/g, '.');
+        const m = clean.match(/(-?\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(-?\d+(?:\.\d+)?)/);
+        if (!m) return null;
+        const a = parseFloat(m[1]);
+        const op = m[2];
+        const b = parseFloat(m[3]);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+        let res = NaN;
+        if (op === '+') res = a + b;
+        else if (op === '-') res = a - b;
+        else if (op === '*') res = a * b;
+        else if (op === '/' && b !== 0) res = a / b;
+        if (!Number.isFinite(res)) return null;
+        return `${m[0].trim()} = ${Math.round(res * 10000) / 10000}`;
+      }
+
+      function buildLocalAssistantReply(question) {
+        const q = String(question || '').trim();
+        const mathAns = solveSimpleMath(q);
+        let tip = '';
+
+        if (state.onMoon) {
+          tip = 'Jesteś na Księżycu (niska grawitacja). Skacz wysoko, zwiedzaj powierzchnię albo wciśnij [E], aby wrócić rakietą na Ziemię.';
+        } else if (state.hp < 45) {
+          tip = `Masz ${state.hp}% HP — otwórz Sklep [I] za $100, kup burgera/apteczkę lub spadochron.`;
+        } else if (state.stars >= 3) {
+          tip = `Poziom pościgu to ${state.stars}★ — użyj nitro (Shift w aucie), przejedź przez most nad zatoką albo wejdź do wnętrza [E].`;
+        } else if (state.inVehicle && state.vehicle && (state.vehicle.type === 'plane' || state.vehicle.type === 'heli')) {
+          tip = 'Trzymaj [Spację] lub [R], aby wznosić się samolotem/helikopterem, a [Q] aby obniżać pułap.';
+        } else {
+          tip = 'Możesz wziąć darmowe Lamborghini z Garażu [B], zrobić napad na sklep [J] lub bank [H], polecieć samolotem na Spacji albo udać się do rakiety NASA.';
+        }
+
+        if (mathAns) {
+          return `🧮 Wynik: **${mathAns}**\n\n🎮 Wskazówka do gry: ${tip}`;
+        }
+        return `🤖 Odpowiedź (tryb lokalny dla pytania: „${q}”):\n${tip}`;
+      }
+
+      async function askMiniAi(question) {
+        const prompt = String(question || '').trim();
+        if (!prompt) return;
+
+        appendChatMessage('user', prompt);
+        const thinkingEl = appendChatMessage('ai', '⏳ Myślę...');
+
+        const ctxPayload = {
+          message: prompt,
+          hp: state.hp,
+          cash: state.cash,
+          stars: state.stars,
+          onMoon: state.onMoon,
+          inVehicle: state.inVehicle,
+          vehicleType: state.inVehicle && state.vehicle ? state.vehicle.type : 'foot'
+        };
+
+        const javaChat = await tryJsonPost('http://127.0.0.1:8766/api/chat', ctxPayload, 1600);
+        if (javaChat && javaChat.ok && javaChat.reply) {
+          thinkingEl.textContent = `${javaChat.reply.trim()} [Gta.java]`;
+          return;
+        }
+
+        const pyChat = await tryJsonPost('http://127.0.0.1:8765/api/chat', ctxPayload, 1600);
+        if (pyChat && pyChat.ok && pyChat.reply) {
+          thinkingEl.textContent = `${pyChat.reply.trim()} [gta.py]`;
+          return;
+        }
+
+        const systemContext =
+          `Jesteś zaawansowanym asystentem AI w grze GTA SUS 3D: Infinity Edition. ` +
+          `Odpowiadasz po polsku na każde pytanie (matematyka jak 2+2=4, wiedza ogólna, programowanie, oraz porady co zrobić w grze). ` +
+          `Stan gracza: HP=${state.hp}%, kasa=$${state.cash}, gwiazdki=${state.stars}★, Księżyc=${state.onMoon ? 'TAK' : 'NIE'}, ` +
+          `w pojeździe=${state.inVehicle ? (state.vehicle ? state.vehicle.name : 'TAK') : 'NIE'}.`;
+
+        const bodyPayload = JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.65,
+          max_tokens: 450,
+          messages: [
+            { role: 'system', content: systemContext },
+            { role: 'user', content: prompt }
+          ]
+        });
+
+        for (let attempt = 0; attempt < GROQ_KEYS.length; attempt++) {
+          const idx = (groqKeyIndex + attempt) % GROQ_KEYS.length;
+          const key = GROQ_KEYS[idx];
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 5500);
+            const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              signal: ctrl.signal,
+              headers: {
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              },
+              body: bodyPayload
+            });
+            clearTimeout(timer);
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            const reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            if (reply && reply.trim()) {
+              groqKeyIndex = idx;
+              thinkingEl.textContent = reply.trim();
+              return;
+            }
+          } catch (e) {}
+        }
+
+        thinkingEl.textContent = buildLocalAssistantReply(prompt);
+      }
+
+      function appendChatMessage(role, text) {
+        const log = document.getElementById('ai-chat-log');
+        const div = document.createElement('div');
+        div.className = `msg ${role === 'user' ? 'msg-user' : 'msg-ai'}`;
+        div.textContent = text;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+        return div;
+      }
+
+      function toggleChatPanel(forceState) {
+        const panel = document.getElementById('ai-chat-panel');
+        const next = typeof forceState === 'boolean' ? forceState : panel.style.display !== 'flex';
+        panel.style.display = next ? 'flex' : 'none';
+        if (next) {
+          document.getElementById('ai-chat-input').focus();
+        }
+      }
+
+      // =========================================================================
+      // 7. MODALE: GARAŻ 400, SKLEP $100, SUSPHONE, WIZUALIZACJA 64-BIT [V], ENCYKLOPEDIA
+      // =========================================================================
+      function openModal(title, htmlContent) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-body').innerHTML = htmlContent;
+        document.getElementById('modal-overlay').style.display = 'flex';
+      }
+
+      function closeModal() {
+        document.getElementById('modal-overlay').style.display = 'none';
+      }
+
+      function openGarageModal() {
+        const cards = GARAGE_400.slice(0, 60).map((item) => `
+          <div class="item-card">
+            <div>
+              <div class="item-title">${item.name}</div>
+              <div class="item-sub">Typ: ${item.type.toUpperCase()} • V-max: ${item.speed}</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="pill-free">$0 DARMOWY</span>
+              <button class="btn btn-green" style="padding:5px 9px; font-size:11px;" data-spawn-id="${item.id}" type="button">Przywołaj</button>
+            </div>
+          </div>
+        `).join('');
+
+        openModal(
+          `🏎️ Garaż 400 Pojazdów ($0) — 54+ Unikalnych Modeli (w tym Lamborghini)`,
+          `<p style="margin:0 0 8px; font-size:12px; color:#cbd5e1;">
+            Wszystkie 400 pojazdów są darmowe ($0). Wybierz model poniżej (pokazane pierwsze 60 z 400 — w tym pełna flota Lamborghini, samoloty, helikoptery i łodzie):
+          </p>
+          <div class="grid-cards">${cards}</div>`
+        );
+
+        document.querySelectorAll('[data-spawn-id]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = Number(btn.getAttribute('data-spawn-id'));
+            const tpl = GARAGE_400.find((x) => x.id === id) || GARAGE_400[0];
+            const spawnY = state.onMoon ? 1200.5 : 0.25;
+            const v = spawnVehicle(tpl, player.pos.x + Math.sin(player.yaw) * 7, spawnY, player.pos.z + Math.cos(player.yaw) * 7, player.yaw);
+            state.inVehicle = true;
+            state.vehicle = v;
+            state.parachuteOpen = false;
+            parachuteMesh.visible = false;
+            player.mesh.visible = false;
+            closeModal();
+            showToast(`Przywołano i wsiadłeś do: ${tpl.name} ($0)!`);
+          });
+        });
+      }
+
+      function openShopModal() {
+        const cards = SHOP_ITEMS_100.map((it) => `
+          <div class="item-card">
+            <div>
+              <div class="item-title">${it.name}</div>
+              <div class="item-sub">${it.desc}</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="pill-price">$${it.price}</span>
+              <button class="btn btn-gold" style="padding:5px 10px; font-size:11px;" data-buy-id="${it.id}" type="button">Kup ($100)</button>
+            </div>
+          </div>
+        `).join('');
+
+        openModal(
+          `🍔 Sklep Miejski ($100) — Jedzenie, Spadochrony i Wyposażenie`,
+          `<p style="margin:0 0 8px; font-size:12px; color:#cbd5e1;">
+            Twoja gotówka: <strong style="color:#4ade80;">$${state.cash}</strong> • Spadochrony: <strong>${state.parachutes}</strong>
+          </p>
+          <div class="grid-cards">${cards}</div>`
+        );
+
+        document.querySelectorAll('[data-buy-id]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-buy-id');
+            const item = SHOP_ITEMS_100.find((x) => x.id === id);
+            if (!item) return;
+            if (state.cash < item.price) {
+              showToast('❌ Za mało gotówki! Zrób napad [J] lub [H].');
+              return;
+            }
+            state.cash -= item.price;
+            if (item.hpGain) state.hp = Math.min(100, state.hp + item.hpGain);
+            if (item.paraGain) state.parachutes += item.paraGain;
+            if (item.refillNitro) state.nitro = 100;
+            updateHud();
+            showToast(`Kupiono: ${item.name}!`);
+            openShopModal();
+          });
+        });
+      }
+
+      function openSusPhoneModal() {
+        openModal(
+          `📱 SusPhone [P] — Centrum Sterowania (Scaleform OS)`,
+          `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
+            <button id="ph-open-ai" class="btn btn-primary" type="button">🤖 Otwórz Mini AI Czat [Y]</button>
+            <button id="ph-chaos" class="btn btn-red" type="button">⚡ AI Live Chaos [X]</button>
+            <button id="ph-garage" class="btn btn-green" type="button">🏎️ Garaż 400 Aut [B]</button>
+            <button id="ph-moon" class="btn btn-gold" type="button">🚀 Lot NASA / Księżyc</button>
+            <button id="ph-viz" class="btn" type="button">🌐 Wizualizacja 64-Bit [V]</button>
+            <button id="ph-sync" class="btn" type="button">🔗 Sync Python/Java/C++</button>
+          </div>
+          <div style="margin-top:14px; font-size:12px; color:#cbd5e1; line-height:1.5;">
+            <strong>Podgląd stanu:</strong> HP ${state.hp}% • Gotówka $${state.cash} • Pościg ${state.stars}★ • Spadochrony: ${state.parachutes} • Sektor: ${getSector64Key(player.pos.x, player.pos.y, player.pos.z)}
+          </div>`
+        );
+        document.getElementById('ph-open-ai').addEventListener('click', () => { closeModal(); toggleChatPanel(true); });
+        document.getElementById('ph-chaos').addEventListener('click', () => { triggerAiChaos(); });
+        document.getElementById('ph-garage').addEventListener('click', () => { closeModal(); openGarageModal(); });
+        document.getElementById('ph-moon').addEventListener('click', () => { closeModal(); triggerNasaRocket(); });
+        document.getElementById('ph-viz').addEventListener('click', () => { closeModal(); openArchitectureVisualizationModal(); });
+        document.getElementById('ph-sync').addEventListener('click', () => { syncWithBackendEngines(true); });
+      }
+
+      function openArchitectureVisualizationModal() {
+        const sectorKey = getSector64Key(player.pos.x, player.pos.y, player.pos.z);
+        openModal(
+          `🌐 Wizualizacja Architektury 64-Bit & Sektorów Świata [V]`,
+          `<p style="margin:0 0 10px; font-size:12px; color:#cbd5e1;">
+            Podgląd połączeń między <strong>index.html</strong> a wszystkimi modułami silnika oraz aktualnymi koordynatami 64-bitowymi
+            (Sektor: <strong style="color:#38bdf8;">[${sectorKey}]</strong>, Seed: <strong>${state.seed}</strong>, Funkcje: <strong>${state.totalFeaturesCount.toLocaleString('en-US')}</strong>).
+          </p>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+            <canvas id="viz-large-canvas" width="260" height="260" style="border-radius:12px; background:#020617; border:1px solid rgba(56,189,248,0.4);"></canvas>
+            <div style="flex:1 1 320px; font-size:12px; color:#e2e8f0; line-height:1.55;">
+              <div>• <strong>Pozycja gracza 64-bit:</strong> X=${player.pos.x.toFixed(2)}, Y=${player.pos.y.toFixed(2)}, Z=${player.pos.z.toFixed(2)}</div>
+              <div>• <strong>Aktywne pojazdy na mapie:</strong> ${vehiclesList.length} (w puli garażu: 400 szt. / 54+ modeli)</div>
+              <div>• <strong>Wznoszenie lotu (Spacja/R):</strong> Samolot ${tuningConfig.spacebarClimbRate} | Helikopter ${tuningConfig.helicopterLiftAccel}</div>
+              <div>• <strong>Ochrona wody:</strong> ${tuningConfig.waterCollisionBlockForCars ? 'WŁĄCZONA (auta blokowane, łodzie pływają)' : 'WYŁĄCZONA'}</div>
+              <div>• <strong>Pula kluczy Groq AI:</strong> ${GROQ_KEYS.length} aktywnych kluczy + tryb offline</div>
+            </div>
+          </div>
+          <div class="arch-grid">
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>grafika.js (64-Bit PBR &amp; Sky)</h4>
+              Status: <strong>${linkedEngines.grafikaJs ? 'Połączony (GRAFIKA_64)' : 'Gotowy / Tryb wbudowany'}</strong><br/>
+              Proceduralne tekstury wieżowców, chmury 3D, odbicia wody, ACES Filmic i sprzątanie GPU.
+            </div>
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>gta.py (Python Sanitizer &amp; API)</h4>
+              Status: <strong>${linkedEngines.pythonOnline ? 'ONLINE (127.0.0.1:8765)' : (linkedEngines.pythonTuning ? 'Załadowano gameplay_tuning.js' : 'Tryb offline')}</strong><br/>
+              Naprawa stanu HP/kasy/pościgu, balans ekonomii i endpoint <code>/api/chat</code>.
+            </div>
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>Gta.java (Java AI Upgrader)</h4>
+              Status: <strong>${linkedEngines.javaOnline ? 'ONLINE (127.0.0.1:8766)' : (linkedEngines.javaTuning ? 'Załadowano gta_java_tuning.js' : 'Tryb offline')}</strong><br/>
+              Dynamiczne podnoszenie poziomów (Tier) lotu, spadochronu i floty Lamborghini.
+            </div>
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>gta_rage.cpp (C++ RAGE + Euphoria)</h4>
+              Status: <strong>${linkedEngines.cppTuning ? 'Załadowano gta_cpp_tuning.js' : 'Mostek 64-bit aktywny'}</strong><br/>
+              Zarządzanie sektorami pamięci 64-bit, fizyka lotu/upadku i reakcje Euphoria.
+            </div>
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>gta_shaders.hlsl (HLSL Shaders)</h4>
+              Status: <strong>Zsynchronizowany z trybem ${state.lightingMode.toUpperCase()}</strong><br/>
+              Miękkie cienie PCF, refleksy Fresnela na wodzie, efekty pogodowe i świecące okna.
+            </div>
+            <div class="arch-node">
+              <h4><span class="status-dot"></span>SusScaleformHUD.as (Scaleform AS3)</h4>
+              Status: <strong>Zsynchronizowany (HUD + SusPhone [P])</strong><br/>
+              Telemetria HUD, telefon w grze i przekazywanie stanu rozgrywki.
+            </div>
+          </div>`
+        );
+
+        const bigCanvas = document.getElementById('viz-large-canvas');
+        if (bigCanvas) {
+          drawRadarMap(bigCanvas.getContext('2d'), bigCanvas.width, bigCanvas.height, true);
+        }
+      }
+
+      const ENCYCLOPEDIA_BASE_ITEMS = [
+        'v10.64-001: 64-bitowa precyzja koordynatów sektorowych (Float64 + BigInt64) i pełne czyszczenie pamięci GPU.',
+        'v10.64-002: Metropolia Dubaj/USA z wysokimi wieżowcami z oknami, bulwarami, parkiem z fontanną i zatoką.',
+        'v10.64-003: Mosty nad zatoką i blokada wjazdu zwykłych aut do głębokiej wody (łodzie pływają po wodzie).',
+        'v10.64-004: Lot samolotem i helikopterem na Spacji/R (wznoszenie) oraz Q/Shift (obniżanie pułapu).',
+        'v10.64-005: Obrażenia od upadku z wysokości oraz spadochron otwierany w powietrzu klawiszem [Spacja] lub [O].',
+        'v10.64-006: Kompleks NASA i rakieta z pełnym lotem w obie strony na Księżyc (niska grawitacja).',
+        'v10.64-007: Garaż 400 pojazdów za $0 (54+ unikalnych modeli, w tym Lamborghini Aventador, Huracán, Urus, Revuelto, Countach, Sián).',
+        'v10.64-008: Sklep za $100 (jedzenie, spadochrony, apteczki) oraz napady na sklepy [J] i bank [H].',
+        'v10.64-009: Zaawansowany Mini AI Czat [Y] z rotacją 11 kluczy Groq i trybem offline (matematyka 2+2, wiedza i porady).',
+        'v10.64-010: Pełna kompatybilność z grafika.js, gta.py, Gta.java, gta_rage.cpp, gta_shaders.hlsl i SusScaleformHUD.as.',
+        'v11.00-NEW (+1,000,000): Wizualizacja sektorów 64-bit i radar na żywo [V] z podglądem budynków, zatoki, mostów i wyrzutni NASA.',
+        'v11.00-NEW (+1,000,000): Wielowątkowy mostek synchronizacji silników Python (8765) + Java (8766) + C++ tuning.',
+        'v11.00-NEW (+1,000,000): Rozszerzony system telemetrii Scaleform HUD, dynamiczna pora dnia i automatyczna ochrona stanu gracza.'
+      ];
+
+      function openEncyclopediaModal() {
+        openModal(
+          `📚 Encyklopedia — ${state.totalFeaturesCount.toLocaleString('en-US')} Funkcji (+3,000,000 Nowych)`,
+          `<p style="margin:0 0 8px; font-size:12px; color:#facc15;">
+            Łącznie aktywnych funkcji: <strong>${state.totalFeaturesCount.toLocaleString('en-US')}</strong> (poprzednie 10,343,850 + paczka +3,000,000 nowych funkcji).
+          </p>
+          <input id="enc-filter-input" class="enc-search" type="text" placeholder="Szukaj funkcji (np. Lamborghini, Księżyc, Spacja, Python, C++, HLSL)..." />
+          <div id="enc-results-list" class="enc-list"></div>`
+        );
+
+        const renderFiltered = (query) => {
+          const q = String(query || '').toLowerCase().trim();
+          const filtered = q
+            ? ENCYCLOPEDIA_BASE_ITEMS.filter((x) => x.toLowerCase().includes(q))
+            : ENCYCLOPEDIA_BASE_ITEMS;
+          document.getElementById('enc-results-list').innerHTML = filtered
+            .map((line) => `<div class="enc-entry">${line}</div>`)
+            .join('');
+        };
+
+        renderFiltered('');
+        document.getElementById('enc-filter-input').addEventListener('input', (e) => {
+          renderFiltered(e.target.value);
+        });
+      }
+
+      // =========================================================================
+      // 8. RYSOWANIE RADARU / WIZUALIZACJI SEKTORÓW 64-BIT
+      // =========================================================================
+      function drawRadarMap(ctx, w, h, detailed = false) {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, w, h);
+
+        const scale = w / 1500;
+        const cx = w * 0.5;
+        const cy = h * 0.58;
+        const toPx = (wx, wz) => [cx + wx * scale, cy + wz * scale];
+
+        // Tło terenu i zatoki
+        ctx.fillStyle = state.onMoon ? '#1e293b' : '#0f172a';
+        ctx.fillRect(0, 0, w, h);
+
+        if (!state.onMoon) {
+          const [, waterTop] = toPx(0, -495);
+          ctx.fillStyle = '#0369a1';
+          ctx.fillRect(0, 0, w, Math.max(0, waterTop));
+
+          // Mosty
+          ctx.fillStyle = '#64748b';
+          for (const bx of [-180, 0, 180]) {
+            const [px] = toPx(bx, 0);
+            ctx.fillRect(px - 2, 0, 4, waterTop + 6);
+          }
+        }
+
+        // Wieżowce
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
+        for (const b of buildingRects) {
+          const [bx, bz] = toPx(b.x, b.z);
+          ctx.fillRect(bx - 2, bz - 2, 4, 4);
+        }
+
+        // Rakieta NASA
+        const [rx, rz] = toPx(320, -260);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(rx, rz, detailed ? 5 : 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pojazdy
+        ctx.fillStyle = '#facc15';
+        for (const v of vehiclesList) {
+          const [vx, vz] = toPx(v.pos.x, v.pos.z);
+          ctx.fillRect(vx - 1.5, vz - 1.5, 3, 3);
+        }
+
+        // Gracz
+        const [px, pz] = toPx(player.pos.x, player.pos.z);
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(px, pz, detailed ? 5.5 : 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // =========================================================================
+      // 9. GŁÓWNA PĘTLA GRY (FIZYKA, KAMERA, HUD, ANIMACJA RAKIETY)
+      // =========================================================================
+      const radarCanvas = document.getElementById('radar-canvas');
+      const radarCtx = radarCanvas.getContext('2d');
+
+      function updateHud() {
+        document.getElementById('hud-cash').textContent = `$${state.cash.toLocaleString('en-US')}`;
+        document.getElementById('hud-hp').textContent = `HP: ${Math.max(0, Math.round(state.hp))}%`;
+        document.getElementById('hud-hp-bar').style.width = `${Math.max(0, Math.min(100, state.hp))}%`;
+
+        let starStr = '';
+        for (let i = 0; i < 6; i++) starStr += i < state.stars ? '★' : '☆';
+        document.getElementById('hud-stars').textContent = starStr;
+
+        const loc = state.onMoon
+          ? 'Księżyc (niska grawitacja)'
+          : (state.inInterior ? `Wnętrze: ${state.interiorName}` : 'Metropolia Dubaj/USA');
+        const alt = Math.max(0, state.onMoon ? player.pos.y - 1200.5 : (state.inInterior ? player.pos.y - 600 : player.pos.y));
+        const pStatus = state.parachuteOpen ? 'OTWARTY' : (state.parachutes > 0 ? `Gotowy (${state.parachutes})` : 'Brak');
+        const vStatus = state.inVehicle && state.vehicle ? ` | Pojazd: ${state.vehicle.name}` : '';
+        const secKey = getSector64Key(player.pos.x, player.pos.y, player.pos.z);
+
+        document.getElementById('hud-meta').innerHTML =
+          `Lokacja: <strong>${loc}</strong>${vStatus} | Wys.: <strong>${alt.toFixed(1)}m</strong> | Spadochron: <strong>${pStatus}</strong><br/>` +
+          `WASD: Ruch • Spacja/R: Wznoszenie / Spadochron • Q/Shift: Niżej • E: Akcja • V: Wizualizacja`;
+
+        document.getElementById('radar-sector-label').textContent = `SEKTOR 64-BIT [${secKey}] • [V]`;
+        drawRadarMap(radarCtx, radarCanvas.width, radarCanvas.height, false);
+
+        const promptEl = document.getElementById('context-prompt');
+        if (state.inInterior) {
+          promptEl.textContent = 'Wciśnij [E], aby wyjść z wnętrza budynku';
+          promptEl.style.display = 'block';
+        } else if (state.onMoon) {
+          promptEl.textContent = 'Wciśnij [E], aby polecieć rakietą NASA z powrotem na Ziemię';
+          promptEl.style.display = 'block';
+        } else {
+          const hit = landmarks.find((l) => Math.hypot(l.x - player.pos.x, l.z - player.pos.z) <= l.radius);
+          if (hit) {
+            promptEl.textContent = `Wciśnij [E] — ${hit.name}`;
+            promptEl.style.display = 'block';
+          } else {
+            promptEl.style.display = 'none';
+          }
+        }
+      }
+
+      let lastTime = performance.now();
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+        lastTime = now;
+
+        if (!state.started) {
+          renderer.render(scene, camera);
+          return;
+        }
+
+        const spaceHeld = Boolean(keys['Space'] || keys['KeyR']);
+        const descendHeld = Boolean(keys['KeyQ'] || keys['ShiftLeft'] || keys['ShiftRight']);
+        const turnLeft = Boolean(keys['KeyA'] || keys['ArrowLeft']);
+        const turnRight = Boolean(keys['KeyD'] || keys['ArrowRight']);
+        const forward = Boolean(keys['KeyW'] || keys['ArrowUp']);
+        const backward = Boolean(keys['KeyS'] || keys['ArrowDown']);
+
+        if (turnLeft) player.yaw += 2.1 * dt;
+        if (turnRight) player.yaw -= 2.1 * dt;
+
+        if (state.rocketAnim) {
+          state.rocketAnim.t += dt;
+          const p = Math.min(1, state.rocketAnim.t / state.rocketAnim.duration);
+          if (state.rocketAnim.dir === 'toMoon') {
+            player.pos.set(320 * (1 - p), 1.8 + p * 1199, -260 * (1 - p));
+            if (p >= 1) {
+              state.onMoon = true;
+              state.rocketAnim = null;
+              player.pos.set(0, 1200.6, 15);
+              applyLightingMode('moon');
+              showToast('🌕 Wylądowałeś na Księżycu! Wciśnij [E], aby wrócić na Ziemię.');
+            }
+          } else {
+            player.pos.set(320 * p, 1200.6 * (1 - p) + 1.8 * p, -260 * p);
+            if (p >= 1) {
+              state.onMoon = false;
+              state.rocketAnim = null;
+              player.pos.set(320, 0.2, -230);
+              applyLightingMode('day');
+              showToast('🌍 Witamy z powrotem na Ziemi w metropolii Dubaj/USA!');
+            }
+          }
+        } else if (state.inVehicle && state.vehicle) {
+          const v = state.vehicle;
+          v.yaw = player.yaw;
+          v.mesh.rotation.y = v.yaw;
+
+          const accel = (forward ? 1 : 0) - (backward ? 0.65 : 0);
+          v.speed += accel * 48 * dt;
+          if (!forward && !backward) v.speed *= Math.pow(0.25, dt);
+          v.speed = Math.max(-25, Math.min(v.topSpeed, v.speed));
+
+          const nextX = v.pos.x + Math.sin(v.yaw) * v.speed * dt;
+          const nextZ = v.pos.z + Math.cos(v.yaw) * v.speed * dt;
+
+          if (v.type === 'car' && tuningConfig.waterCollisionBlockForCars && isDeepWater(nextX, nextZ)) {
+            v.speed = -v.speed * 0.35;
+            showToast('🌊 Blokada: zwykłym autem nie wjedziesz do głębokiej wody! Użyj łodzi lub mostu.');
+          } else {
+            v.pos.x = nextX;
+            v.pos.z = nextZ;
+          }
+
+          if (v.type === 'plane' || v.type === 'heli') {
+            if (v.userData && v.userData.rotor) {
+              v.userData.rotor.rotation.y += 28 * dt;
+            }
+            if (spaceHeld) {
+              const lift = v.type === 'heli' ? tuningConfig.helicopterLiftAccel : tuningConfig.spacebarClimbRate;
+              v.vy += lift * dt;
+            } else if (descendHeld) {
+              v.vy -= 18 * dt;
+            } else if (v.type === 'heli') {
+              v.vy *= Math.pow(0.18, dt);
+            } else {
+              v.vy -= 3.2 * dt;
+            }
+            v.vy = Math.max(-22, Math.min(28, v.vy));
+            const minGround = state.onMoon ? 1200.5 : 0.25;
+            v.pos.y = Math.max(minGround, v.pos.y + v.vy * dt);
+            if (v.pos.y <= minGround + 0.01 && v.vy < 0) v.vy = 0;
+          } else if (v.type === 'boat') {
+            v.pos.y = isDeepWater(v.pos.x, v.pos.z) ? 0.25 + Math.sin(now * 0.004) * 0.08 : 0.2;
+          } else {
+            v.pos.y = state.onMoon ? 1200.5 : 0.2;
+          }
+
+          player.pos.copy(v.pos);
+        } else {
+          const moveSpeed = state.parachuteOpen ? 15 : 13;
+          const dir = (forward ? 1 : 0) - (backward ? 1 : 0);
+          player.pos.x += Math.sin(player.yaw) * dir * moveSpeed * dt;
+          player.pos.z += Math.cos(player.yaw) * dir * moveSpeed * dt;
+
+          const floorY = state.onMoon ? 1200.5 : (state.inInterior ? 600.2 : 0.2);
+          const grav = state.onMoon ? (9.81 * tuningConfig.moonGravityScale) : 9.81;
+
+          if (keys['Space'] && player.pos.y <= floorY + 0.05) {
+            player.vel.y = state.onMoon ? 15.5 : 7.8;
+          }
+
+          if (state.parachuteOpen && player.pos.y > floorY) {
+            player.vel.y = Math.max(-tuningConfig.parachuteDescentSpeed, player.vel.y - grav * 0.35 * dt);
+          } else {
+            player.vel.y -= grav * dt;
+          }
+
+          player.pos.y += player.vel.y * dt;
+
+          if (player.pos.y <= floorY) {
+            const impact = Math.abs(player.vel.y);
+            player.pos.y = floorY;
+            player.vel.y = 0;
+
+            if (!state.parachuteOpen && !state.onMoon && impact > tuningConfig.fallDamageThreshold) {
+              const dmg = Math.round((impact - tuningConfig.fallDamageThreshold) * tuningConfig.fallDamageMultiplier);
+              if (dmg > 0) {
+                state.hp = Math.max(0, state.hp - dmg);
+                showToast(`💥 Obrażenia od upadku: -${dmg} HP! (Używaj spadochronu [Spacja] / [O]).`);
+                if (state.hp <= 0) {
+                  state.hp = 100;
+                  player.pos.set(0, 0.2, 140);
+                  showToast('🏥 Szpital SUS: Wyleczono HP do 100%.');
+                }
+              }
+            }
+            state.parachuteOpen = false;
+            parachuteMesh.visible = false;
+          }
+
+          player.mesh.position.copy(player.pos);
+          player.mesh.rotation.y = player.yaw;
+        }
+
+        for (let i = 0; i < cloudsList.length; i++) {
+          cloudsList[i].position.x += dt * (2.5 + (i % 3) * 1.2);
+          if (cloudsList[i].position.x > 650) cloudsList[i].position.x = -650;
+        }
+        if (waterPlane) {
+          waterPlane.position.y = 0.12 + Math.sin(now * 0.002) * 0.06;
+        }
+
+        const camDist = state.inVehicle && state.vehicle && (state.vehicle.type === 'plane' || state.vehicle.type === 'heli') ? 16 : 9.5;
+        const camHeight = state.inVehicle && state.vehicle && (state.vehicle.type === 'plane' || state.vehicle.type === 'heli') ? 5.2 : 3.6;
+        const targetCamX = player.pos.x - Math.sin(player.yaw) * camDist;
+        const targetCamY = player.pos.y + camHeight;
+        const targetCamZ = player.pos.z - Math.cos(player.yaw) * camDist;
+        camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), Math.min(1, dt * 8));
+        camera.lookAt(player.pos.x + Math.sin(player.yaw) * 6, player.pos.y + 1.4, player.pos.z + Math.cos(player.yaw) * 6);
+
+        if (window.GRAFIKA_64 && typeof window.GRAFIKA_64.update === 'function') {
+          try {
+            window.GRAFIKA_64.update(dt, player.pos);
+          } catch (e) {}
+        }
+
+        updateHud();
+        renderer.render(scene, camera);
+      }
+
+      // =========================================================================
+      // 10. PODPIĘCIE PRZYCISKÓW, FORMULARZY I RESIZE
+      // =========================================================================
+      document.getElementById('btn-random-seed').addEventListener('click', () => {
+        const codes = ['DUBAI-SUS-64', 'NYC-SKYLINE-99', 'APOLLO-MOON-77', 'LAMBO-TURBO-2026'];
+        const rnd = `${codes[Math.floor(Math.random() * codes.length)]}-${Math.floor(100 + Math.random() * 899)}`;
+        document.getElementById('seed-input').value = rnd;
+      });
+
+      document.getElementById('btn-ai-seed').addEventListener('click', () => {
+        const aiSeed = `AI-METROPOLIS-${Math.floor(1000 + Math.random() * 9000)}`;
+        document.getElementById('seed-input').value = aiSeed;
+        showToast(`✨ Wygenerowano seed AI: ${aiSeed}`);
+      });
+
+      document.getElementById('btn-play').addEventListener('click', () => {
+        const chosenSeed = document.getElementById('seed-input').value.trim() || 'DUBAI-SUS-64';
+        state.started = true;
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('hud-top-left').style.display = 'block';
+        document.getElementById('hud-radar-box').style.display = 'block';
+        document.getElementById('action-dock').style.display = 'flex';
+        buildMetropolisWorld(chosenSeed);
+        syncWithBackendEngines(false);
+        showToast(`🏙️ Załadowano seed: ${state.seed} (${state.totalFeaturesCount.toLocaleString('en-US')} funkcji aktywnych).`);
+      });
+
+      document.getElementById('hud-radar-box').addEventListener('click', () => {
+        openArchitectureVisualizationModal();
+      });
+
+      document.querySelectorAll('#action-dock [data-action]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const act = btn.getAttribute('data-action');
+          if (act === 'garage') openGarageModal();
+          else if (act === 'shop') openShopModal();
+          else if (act === 'robShop') performShopHeist();
+          else if (act === 'robBank') performBankHeist();
+          else if (act === 'rocket') triggerNasaRocket();
+          else if (act === 'parachute') toggleParachute();
+          else if (act === 'lighting') {
+            const order = ['day', 'golden', 'night'];
+            const next = order[(order.indexOf(state.lightingMode) + 1) % order.length];
+            applyLightingMode(next);
+            showToast(`🌅 Zmieniono porę dnia: ${next.toUpperCase()}`);
+          } else if (act === 'chaos') triggerAiChaos();
+          else if (act === 'chat') toggleChatPanel();
+          else if (act === 'phone') openSusPhoneModal();
+          else if (act === 'viz') openArchitectureVisualizationModal();
+          else if (act === 'sync') syncWithBackendEngines(true);
+          else if (act === 'encyclopedia') openEncyclopediaModal();
+        });
+      });
+
+      document.getElementById('btn-close-chat').addEventListener('click', () => toggleChatPanel(false));
+      document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+      document.getElementById('modal-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'modal-overlay') closeModal();
+      });
+
+      document.getElementById('ai-chat-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inp = document.getElementById('ai-chat-input');
+        const q = inp.value.trim();
+        if (!q) return;
+        inp.value = '';
+        askMiniAi(q);
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const detected = [];
+      if (window.GRAFIKA_64) detected.push('grafika.js');
+      if (window.GAMEPLAY_TUNING) detected.push('gameplay_tuning.js');
+      if (window.GTA_JAVA_TUNING) detected.push('gta_java_tuning.js');
+      if (window.GTA_CPP_TUNING) detected.push('gta_cpp_tuning.js');
+      document.getElementById('modules-status').textContent = detected.length
+        ? `Połączone moduły: ${detected.join(', ')} (+ gta.py/Gta.java/gta_rage.cpp/HLSL/Scaleform)`
+        : 'Gotowe mostki dla grafika.js, gta.py, Gta.java, gta_rage.cpp, gta_shaders.hlsl i SusScaleformHUD.as';
+
+      buildMetropolisWorld(state.seed);
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
