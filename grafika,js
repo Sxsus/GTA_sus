@@ -1,0 +1,824 @@
+/**
+ * grafika.js — 64-Bit Graphics & Procedural PBR Engine for GTA SUS 3D: Infinity Edition
+ * Kompatybilny z Three.js, index.html oraz window.GTA_SUS_OPTIMIZER / window.optymalizer.
+ */
+(function (global) {
+  'use strict';
+
+  const PRESETS = {
+    day: {
+      name: 'Dzień Metropolii',
+      skyTop: '#1d4ed8',
+      skyHorizon: '#bae6fd',
+      fogColor: '#bae6fd',
+      fogDensity: 0.00085,
+      sunColor: '#fffbeb',
+      sunIntensity: 2.4,
+      hemiSky: '#e0f2fe',
+      hemiGround: '#334155',
+      hemiIntensity: 1.05,
+      exposure: 1.08,
+      windowEmissive: '#38bdf8',
+      windowIntensity: 0.15,
+      bloomAlpha: 0.06,
+      vignetteAlpha: 0.22
+    },
+    golden: {
+      name: 'Złota Godzina (Dubaj/USA)',
+      skyTop: '#312e81',
+      skyHorizon: '#fb923c',
+      fogColor: '#fdba74',
+      fogDensity: 0.0011,
+      sunColor: '#ffedd5',
+      sunIntensity: 2.9,
+      hemiSky: '#fed7aa',
+      hemiGround: '#1e1b4b',
+      hemiIntensity: 0.95,
+      exposure: 1.15,
+      windowEmissive: '#fbbf24',
+      windowIntensity: 0.55,
+      bloomAlpha: 0.14,
+      vignetteAlpha: 0.28
+    },
+    night: {
+      name: 'Noc Neonów',
+      skyTop: '#020617',
+      skyHorizon: '#0f172a',
+      fogColor: '#090d1a',
+      fogDensity: 0.00135,
+      sunColor: '#93c5fd',
+      sunIntensity: 0.65,
+      hemiSky: '#1e293b',
+      hemiGround: '#020617',
+      hemiIntensity: 0.55,
+      exposure: 1.18,
+      windowEmissive: '#fde047',
+      windowIntensity: 1.35,
+      bloomAlpha: 0.22,
+      vignetteAlpha: 0.36
+    },
+    moon: {
+      name: 'Orbita i Powierzchnia Księżyca',
+      skyTop: '#000000',
+      skyHorizon: '#090d16',
+      fogColor: '#05070e',
+      fogDensity: 0.00025,
+      sunColor: '#ffffff',
+      sunIntensity: 3.1,
+      hemiSky: '#cbd5e1',
+      hemiGround: '#1e293b',
+      hemiIntensity: 0.35,
+      exposure: 1.12,
+      windowEmissive: '#60a5fa',
+      windowIntensity: 0.6,
+      bloomAlpha: 0.16,
+      vignetteAlpha: 0.32
+    }
+  };
+
+  function clamp(v, min, max, fallback) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  /**
+   * 64-bitowa precyzja koordynatów świata (Float64 + BigInt64 dla indeksów sektorów)
+   */
+  class Precision64 {
+    constructor(sectorSize = 1024.0) {
+      this.sectorSize = new Float64Array([sectorSize])[0];
+      this.origin = new Float64Array([0.0, 0.0, 0.0]);
+      this.sector = new BigInt64Array([0n, 0n, 0n]);
+    }
+
+    setOrigin(x, y, z) {
+      this.origin[0] = Number(x) || 0.0;
+      this.origin[1] = Number(y) || 0.0;
+      this.origin[2] = Number(z) || 0.0;
+      const s = this.sectorSize;
+      this.sector[0] = BigInt(Math.floor(this.origin[0] / s));
+      this.sector[1] = BigInt(Math.floor(this.origin[1] / s));
+      this.sector[2] = BigInt(Math.floor(this.origin[2] / s));
+    }
+
+    toLocal64(x, y, z) {
+      const fx = new Float64Array([Number(x) - this.origin[0]])[0];
+      const fy = new Float64Array([Number(y) - this.origin[1]])[0];
+      const fz = new Float64Array([Number(z) - this.origin[2]])[0];
+      return { x: fx, y: fy, z: fz };
+    }
+
+    getSectorKey() {
+      return `${this.sector[0]}:${this.sector[1]}:${this.sector[2]}`;
+    }
+  }
+
+  function createSeededRng(seedInput) {
+    const str = String(seedInput ?? 'DUBAI-SUS-64');
+    let h = 14695981039346656037n;
+    const prime = 1099511628211n;
+    const mask = 0xffffffffffffffffn;
+    for (let i = 0; i < str.length; i++) {
+      h ^= BigInt(str.charCodeAt(i));
+      h = (h * prime) & mask;
+    }
+    let state = h === 0n ? 0x9e3779b97f4a7c15n : h;
+    return function nextFloat64() {
+      state ^= state << 13n;
+      state &= mask;
+      state ^= state >> 7n;
+      state ^= state << 17n;
+      state &= mask;
+      return Number(state & 0x1fffffffffffffn) / 9007199254740992;
+    };
+  }
+
+  /**
+   * Generator proceduralnych tekstur PBR (albedo, roughness/bump, okna wieżowców, kratery Księżyca)
+   */
+  class ProceduralTextureAtlas {
+    constructor(THREE) {
+      this.THREE = THREE;
+      this.textures = [];
+    }
+
+    register(tex, repeatX = 1, repeatY = 1, isColor = true) {
+      if (!tex) return null;
+      tex.wrapS = this.THREE.RepeatWrapping;
+      tex.wrapT = this.THREE.RepeatWrapping;
+      tex.repeat.set(repeatX, repeatY);
+      tex.anisotropy = 8;
+      if (isColor && 'colorSpace' in tex && this.THREE.SRGBColorSpace) {
+        tex.colorSpace = this.THREE.SRGBColorSpace;
+      }
+      tex.needsUpdate = true;
+      this.textures.push(tex);
+      return tex;
+    }
+
+    createSkyDomeTexture(topHex, horizonHex) {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 512;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0.0, topHex);
+      grad.addColorStop(0.55, horizonHex);
+      grad.addColorStop(1.0, horizonHex);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 512);
+      return this.register(new this.THREE.CanvasTexture(c), 1, 1, true);
+    }
+
+    createRoadTexture(repeatX = 1, repeatY = 24) {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 512;
+      const ctx = c.getContext('2d');
+      const rng = createSeededRng('ASPHALT-64');
+
+      ctx.fillStyle = '#1e242d';
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let i = 0; i < 6500; i++) {
+        const x = rng() * 512;
+        const y = rng() * 512;
+        const v = 24 + Math.floor(rng() * 28);
+        ctx.fillStyle = `rgb(${v},${v + 2},${v + 6})`;
+        ctx.fillRect(x, y, 2, 2);
+      }
+
+      // Krawędzie jezdni
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(18, 0, 8, 512);
+      ctx.fillRect(486, 0, 8, 512);
+
+      // Przerywane linie pasów
+      ctx.fillStyle = '#facc15';
+      for (let y = 16; y < 512; y += 64) {
+        ctx.fillRect(250, y, 12, 34);
+      }
+
+      return this.register(new this.THREE.CanvasTexture(c), repeatX, repeatY, true);
+    }
+
+    createTowerFacadeTexture(theme = 'glass', seed = 'TOWER') {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 1024;
+      const ctx = c.getContext('2d');
+      const rng = createSeededRng(seed);
+
+      ctx.fillStyle = theme === 'gold' ? '#1c1917' : '#0f172a';
+      ctx.fillRect(0, 0, 512, 1024);
+
+      const cols = 16;
+      const rows = 42;
+      const padX = 10;
+      const padY = 8;
+      const cellW = 512 / cols;
+      const cellH = 1024 / rows;
+
+      for (let r = 0; r < rows; r++) {
+        for (let col = 0; col < cols; col++) {
+          const x = col * cellW + padX * 0.5;
+          const y = r * cellH + padY * 0.5;
+          const w = cellW - padX;
+          const h = cellH - padY;
+
+          const lit = rng() > 0.42;
+          if (lit) {
+            if (theme === 'gold') {
+              ctx.fillStyle = rng() > 0.35 ? '#fde68a' : '#7dd3fc';
+            } else {
+              ctx.fillStyle = rng() > 0.25 ? '#bae6fd' : '#fef08a';
+            }
+          } else {
+            ctx.fillStyle = theme === 'gold' ? '#292524' : '#1e293b';
+          }
+          ctx.fillRect(x, y, w, h);
+
+          // Szyba / odbicie
+          ctx.fillStyle = 'rgba(255,255,255,0.14)';
+          ctx.fillRect(x, y, w * 0.45, h);
+        }
+      }
+
+      return this.register(new this.THREE.CanvasTexture(c), 1, 1, true);
+    }
+
+    createWaterNormalTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+      const img = ctx.createImageData(256, 256);
+
+      for (let y = 0; y < 256; y++) {
+        for (let x = 0; x < 256; x++) {
+          const idx = (y * 256 + x) * 4;
+          const w1 = Math.sin((x / 256) * Math.PI * 8) * Math.cos((y / 256) * Math.PI * 8);
+          const w2 = Math.sin(((x + y) / 256) * Math.PI * 12);
+          const nx = Math.floor(128 + w1 * 40);
+          const ny = Math.floor(128 + w2 * 40);
+          img.data[idx] = nx;
+          img.data[idx + 1] = ny;
+          img.data[idx + 2] = 255;
+          img.data[idx + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return this.register(new this.THREE.CanvasTexture(c), 18, 18, false);
+    }
+
+    createMoonSurfaceTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 512;
+      const ctx = c.getContext('2d');
+      const rng = createSeededRng('MOON-CRATERS-64');
+
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let i = 0; i < 4500; i++) {
+        const x = rng() * 512;
+        const y = rng() * 512;
+        const shade = 75 + Math.floor(rng() * 65);
+        ctx.fillStyle = `rgb(${shade},${shade + 2},${shade + 6})`;
+        ctx.fillRect(x, y, 2, 2);
+      }
+
+      for (let i = 0; i < 55; i++) {
+        const cx = rng() * 512;
+        const cy = rng() * 512;
+        const rad = 6 + rng() * 28;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.45)';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
+        ctx.stroke();
+      }
+
+      return this.register(new this.THREE.CanvasTexture(c), 24, 24, true);
+    }
+
+    disposeAll() {
+      for (const tex of this.textures) {
+        if (tex && typeof tex.dispose === 'function') {
+          tex.dispose();
+        }
+      }
+      this.textures = [];
+    }
+  }
+
+  /**
+   * Główny silnik graficzny 64-bitowy
+   */
+  class GrafikaEngine64 {
+    constructor(options = {}) {
+      this.THREE = options.THREE || global.THREE;
+      this.precision = new Precision64(options.sectorSize || 1024.0);
+      this.presetKey = options.preset || 'day';
+      this.seed = options.seed || 'DUBAI-SUS-64';
+
+      this.renderer = null;
+      this.scene = null;
+      this.camera = null;
+
+      this.rootGroup = null;
+      this.skyMesh = null;
+      this.sunLight = null;
+      this.hemiLight = null;
+      this.waterMesh = null;
+      this.moonGroup = null;
+      this.clouds = [];
+      this.animatedProps = [];
+
+      this._textures = null;
+      this._geometries = [];
+      this._materials = [];
+      this._postCanvas = null;
+      this._postCtx = null;
+      this._time = 0;
+    }
+
+    trackGeo(geo) {
+      if (geo) this._geometries.push(geo);
+      return geo;
+    }
+
+    trackMat(mat) {
+      if (mat) this._materials.push(mat);
+      return mat;
+    }
+
+    init({ renderer, scene, camera, seed, preset } = {}) {
+      if (!this.THREE) {
+        throw new Error('grafika.js wymaga załadowanego Three.js (window.THREE).');
+      }
+      if (seed) this.seed = seed;
+      if (preset && PRESETS[preset]) this.presetKey = preset;
+
+      if (renderer) {
+        this.renderer = renderer;
+      } else if (!this.renderer) {
+        this.renderer = new this.THREE.WebGLRenderer({
+          antialias: true,
+          powerPreference: 'high-performance'
+        });
+        this.renderer.setSize(global.innerWidth || 1280, global.innerHeight || 720);
+        if (typeof document !== 'undefined' && document.body && !this.renderer.domElement.parentNode) {
+          document.body.appendChild(this.renderer.domElement);
+        }
+      }
+
+      this.scene = scene || this.renderer.scene || new this.THREE.Scene();
+      if (!this.camera) {
+        this.camera =
+          camera ||
+          new this.THREE.PerspectiveCamera(
+            65,
+            (global.innerWidth || 1280) / Math.max(1, global.innerHeight || 720),
+            0.25,
+            3500
+          );
+      }
+
+      this.configureRendererPBR();
+      this.rebuildEnvironment();
+      this.mountPostFxOverlay();
+
+      global.addEventListener('resize', () => this.handleResize());
+      return {
+        renderer: this.renderer,
+        scene: this.scene,
+        camera: this.camera,
+        clouds: this.clouds
+      };
+    }
+
+    configureRendererPBR() {
+      const THREE = this.THREE;
+      const r = this.renderer;
+      if (!r) return;
+
+      const maxDpr = clamp(global.devicePixelRatio || 1, 1, 2, 1);
+      r.setPixelRatio(maxDpr);
+      if ('toneMapping' in r && THREE.ACESFilmicToneMapping) {
+        r.toneMapping = THREE.ACESFilmicToneMapping;
+      }
+      if ('toneMappingExposure' in r) {
+        const p = PRESETS[this.presetKey] || PRESETS.day;
+        r.toneMappingExposure = p.exposure;
+      }
+      if (r.shadowMap) {
+        r.shadowMap.enabled = true;
+        r.shadowMap.type = THREE.PCFSoftShadowMap || r.shadowMap.type;
+      }
+    }
+
+    clearGraphicsGroup() {
+      if (this.rootGroup && this.scene) {
+        this.scene.remove(this.rootGroup);
+      }
+      for (const g of this._geometries) {
+        if (g && typeof g.dispose === 'function') g.dispose();
+      }
+      for (const m of this._materials) {
+        if (m && typeof m.dispose === 'function') m.dispose();
+      }
+      if (this._textures) {
+        this._textures.disposeAll();
+      }
+
+      this._geometries = [];
+      this._materials = [];
+      this._textures = new ProceduralTextureAtlas(this.THREE);
+      this.clouds = [];
+      this.animatedProps = [];
+      this.skyMesh = null;
+      this.sunLight = null;
+      this.hemiLight = null;
+      this.waterMesh = null;
+      this.moonGroup = null;
+
+      this.rootGroup = new this.THREE.Group();
+      this.rootGroup.name = 'Grafika64_WorldRoot';
+      this.scene.add(this.rootGroup);
+    }
+
+    rebuildEnvironment(seed = this.seed, preset = this.presetKey) {
+      this.seed = seed || this.seed;
+      if (preset && PRESETS[preset]) this.presetKey = preset;
+      const cfg = PRESETS[this.presetKey] || PRESETS.day;
+      const THREE = this.THREE;
+
+      this.clearGraphicsGroup();
+      const rng = createSeededRng(`${this.seed}:${this.presetKey}`);
+
+      this.scene.fog = new THREE.FogExp2(cfg.fogColor, cfg.fogDensity);
+      if ('toneMappingExposure' in this.renderer) {
+        this.renderer.toneMappingExposure = cfg.exposure;
+      }
+
+      // Niebo (SkyDome)
+      const skyTex = this._textures.createSkyDomeTexture(cfg.skyTop, cfg.skyHorizon);
+      const skyGeo = this.trackGeo(new THREE.SphereGeometry(2200, 32, 24));
+      const skyMat = this.trackMat(
+        new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false })
+      );
+      this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
+      this.rootGroup.add(this.skyMesh);
+
+      // Światło kierunkowe i półkuliste
+      this.hemiLight = new THREE.HemisphereLight(cfg.hemiSky, cfg.hemiGround, cfg.hemiIntensity);
+      this.rootGroup.add(this.hemiLight);
+
+      this.sunLight = new THREE.DirectionalLight(cfg.sunColor, cfg.sunIntensity);
+      this.sunLight.position.set(280, 420, 220);
+      this.sunLight.castShadow = true;
+      this.sunLight.shadow.mapSize.width = 2048;
+      this.sunLight.shadow.mapSize.height = 2048;
+      const d = 320;
+      this.sunLight.shadow.camera.left = -d;
+      this.sunLight.shadow.camera.right = d;
+      this.sunLight.shadow.camera.top = d;
+      this.sunLight.shadow.camera.bottom = -d;
+      this.sunLight.shadow.camera.near = 20;
+      this.sunLight.shadow.camera.far = 1200;
+      this.rootGroup.add(this.sunLight);
+
+      // Teren główny + Zatoka wodna + Mosty
+      const groundGeo = this.trackGeo(new THREE.PlaneGeometry(1600, 1600, 1, 1));
+      const groundMat = this.trackMat(
+        new THREE.MeshStandardMaterial({
+          color: this.presetKey === 'moon' ? '#475569' : '#1e293b',
+          roughness: 0.85,
+          metalness: 0.1
+        })
+      );
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      this.rootGroup.add(ground);
+
+      const waterTex = this._textures.createWaterNormalTexture();
+      const waterGeo = this.trackGeo(new THREE.PlaneGeometry(1600, 520, 1, 1));
+      const waterMat = this.trackMat(
+        new THREE.MeshStandardMaterial({
+          color: '#0284c7',
+          roughness: 0.18,
+          metalness: 0.72,
+          normalMap: waterTex,
+          transparent: true,
+          opacity: 0.88
+        })
+      );
+      this.waterMesh = new THREE.Mesh(waterGeo, waterMat);
+      this.waterMesh.rotation.x = -Math.PI / 2;
+      this.waterMesh.position.set(0, 0.12, -520);
+      this.rootGroup.add(this.waterMesh);
+
+      // Ulice i mosty nad zatoką
+      const roadTex = this._textures.createRoadTexture(1, 28);
+      const roadMat = this.trackMat(
+        new THREE.MeshStandardMaterial({
+          map: roadTex,
+          roughness: 0.75,
+          metalness: 0.12
+        })
+      );
+
+      for (const xPos of [-120, 0, 120]) {
+        const avenueGeo = this.trackGeo(new THREE.BoxGeometry(22, 0.16, 1280));
+        const avenue = new THREE.Mesh(avenueGeo, roadMat);
+        avenue.position.set(xPos, 0.09, -120);
+        avenue.receiveShadow = true;
+        this.rootGroup.add(avenue);
+
+        // Most nad zatoką
+        const bridgeGeo = this.trackGeo(new THREE.BoxGeometry(24, 2.2, 540));
+        const bridgeMat = this.trackMat(
+          new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.55, metalness: 0.45 })
+        );
+        const bridge = new THREE.Mesh(bridgeGeo, bridgeMat);
+        bridge.position.set(xPos, 5.5, -520);
+        bridge.castShadow = true;
+        bridge.receiveShadow = true;
+        this.rootGroup.add(bridge);
+      }
+
+      // Wieżowce z oknami (styl Dubaj / USA)
+      const facadeA = this._textures.createTowerFacadeTexture('glass', `${this.seed}-A`);
+      const facadeB = this._textures.createTowerFacadeTexture('gold', `${this.seed}-B`);
+      const litFactor = cfg.windowIntensity;
+
+      const towerSpots = [
+        { x: 0, z: 40, w: 36, h: 175, d: 36, gold: true },
+        { x: -58, z: 65, w: 28, h: 132, d: 28, gold: false },
+        { x: 62, z: 50, w: 30, h: 148, d: 30, gold: true },
+        { x: -175, z: 110, w: 26, h: 95, d: 26, gold: false },
+        { x: 175, z: 90, w: 28, h: 110, d: 28, gold: false },
+        { x: -65, z: -55, w: 26, h: 118, d: 26, gold: false },
+        { x: 65, z: -65, w: 26, h: 124, d: 26, gold: true }
+      ];
+
+      for (let i = 0; i < 24; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const tx = side * (95 + rng() * 240);
+        const tz = -150 + rng() * 360;
+        if (Math.abs(tx) < 28 && tz > -260 && tz < 180) continue;
+        towerSpots.push({
+          x: tx,
+          z: tz,
+          w: 18 + rng() * 14,
+          h: 45 + rng() * 115,
+          d: 18 + rng() * 14,
+          gold: rng() > 0.65
+        });
+      }
+
+      for (const t of towerSpots) {
+        const bGeo = this.trackGeo(new THREE.BoxGeometry(t.w, t.h, t.d));
+        const bMat = this.trackMat(
+          new THREE.MeshStandardMaterial({
+            map: t.gold ? facadeB : facadeA,
+            emissive: new THREE.Color(cfg.windowEmissive),
+            emissiveMap: t.gold ? facadeB : facadeA,
+            emissiveIntensity: litFactor,
+            roughness: 0.35,
+            metalness: 0.65
+          })
+        );
+        const mesh = new THREE.Mesh(bGeo, bMat);
+        mesh.position.set(t.x, t.h * 0.5, t.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        this.rootGroup.add(mesh);
+      }
+
+      // Wyrzutnia NASA + Rakieta
+      this.buildNasaRocketPad(230, -210);
+
+      // Powierzchnia Księżyca (ukryta domyślnie, aktywowana przy locie na Księżyc)
+      this.buildMoonSurface(0, 950, 0);
+
+      // Wielowarstwowe chmury 3D
+      this.buildClouds3D(rng, 28);
+
+      // Synchronizacja z optymalizatorem, jeśli istnieje
+      const opt = global.GTA_SUS_OPTIMIZER || global.optymalizer;
+      if (opt && typeof opt.attach === 'function') {
+        opt.attach({
+          renderer: this.renderer,
+          scene: this.scene,
+          camera: this.camera,
+          refs: { clouds: this.clouds }
+        });
+      }
+    }
+
+    buildNasaRocketPad(x, z) {
+      const THREE = this.THREE;
+      const padGroup = new THREE.Group();
+      padGroup.position.set(x, 0, z);
+
+      const baseGeo = this.trackGeo(new THREE.CylinderGeometry(24, 28, 2.5, 24));
+      const baseMat = this.trackMat(
+        new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.6, metalness: 0.4 })
+      );
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 1.25;
+      base.receiveShadow = true;
+      padGroup.add(base);
+
+      const bodyGeo = this.trackGeo(new THREE.CylinderGeometry(2.4, 2.8, 22, 20));
+      const bodyMat = this.trackMat(
+        new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.3, metalness: 0.5 })
+      );
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 13.5;
+      body.castShadow = true;
+      padGroup.add(body);
+
+      const noseGeo = this.trackGeo(new THREE.ConeGeometry(2.4, 6.5, 20));
+      const noseMat = this.trackMat(
+        new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.35, metalness: 0.4 })
+      );
+      const nose = new THREE.Mesh(noseGeo, noseMat);
+      nose.position.y = 27.75;
+      nose.castShadow = true;
+      padGroup.add(nose);
+
+      this.rootGroup.add(padGroup);
+    }
+
+    buildMoonSurface(x, y, z) {
+      const THREE = this.THREE;
+      const moonTex = this._textures.createMoonSurfaceTexture();
+      const group = new THREE.Group();
+      group.position.set(x, y, z);
+      group.visible = this.presetKey === 'moon';
+
+      const discGeo = this.trackGeo(new THREE.CylinderGeometry(420, 420, 8, 48));
+      const discMat = this.trackMat(
+        new THREE.MeshStandardMaterial({ map: moonTex, roughness: 0.92, metalness: 0.05 })
+      );
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.receiveShadow = true;
+      group.add(disc);
+
+      this.moonGroup = group;
+      this.rootGroup.add(group);
+    }
+
+    buildClouds3D(rng, count = 28) {
+      const THREE = this.THREE;
+      const puffGeo = this.trackGeo(new THREE.IcosahedronGeometry(12, 1));
+      const puffMat = this.trackMat(
+        new THREE.MeshStandardMaterial({
+          color: '#ffffff',
+          roughness: 0.95,
+          metalness: 0.0,
+          transparent: true,
+          opacity: 0.88
+        })
+      );
+
+      for (let i = 0; i < count; i++) {
+        const cluster = new THREE.Group();
+        const layerY = 155 + (i % 3) * 42;
+        cluster.position.set(-450 + rng() * 900, layerY, -650 + rng() * 1150);
+
+        const puffs = 3 + Math.floor(rng() * 4);
+        for (let p = 0; p < puffs; p++) {
+          const puff = new THREE.Mesh(puffGeo, puffMat);
+          puff.position.set((p - 1.5) * 9, (rng() - 0.5) * 4, (rng() - 0.5) * 7);
+          const s = 0.7 + rng() * 0.9;
+          puff.scale.set(s * 1.3, s * 0.75, s);
+          cluster.add(puff);
+        }
+
+        this.clouds.push(cluster);
+        this.rootGroup.add(cluster);
+      }
+    }
+
+    setPreset(presetName) {
+      if (!PRESETS[presetName]) return;
+      this.presetKey = presetName;
+      this.rebuildEnvironment(this.seed, presetName);
+    }
+
+    setMoonMode(enabled) {
+      this.setPreset(enabled ? 'moon' : 'day');
+      if (this.moonGroup) {
+        this.moonGroup.visible = Boolean(enabled);
+      }
+    }
+
+    mountPostFxOverlay() {
+      if (typeof document === 'undefined' || !document.body) return;
+      if (this._postCanvas) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.id = 'grafika64-postfx';
+      canvas.width = 640;
+      canvas.height = 360;
+      canvas.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'width:100%',
+        'height:100%',
+        'pointer-events:none',
+        'z-index:2'
+      ].join(';');
+      document.body.appendChild(canvas);
+      this._postCanvas = canvas;
+      this._postCtx = canvas.getContext('2d');
+    }
+
+    renderPostFx() {
+      if (!this._postCtx || !this._postCanvas) return;
+      const cfg = PRESETS[this.presetKey] || PRESETS.day;
+      const ctx = this._postCtx;
+      const w = this._postCanvas.width;
+      const h = this._postCanvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Subtelna poświata / bloom
+      const glow = ctx.createRadialGradient(w * 0.5, h * 0.45, w * 0.08, w * 0.5, h * 0.5, w * 0.65);
+      glow.addColorStop(0, `rgba(255, 255, 255, ${cfg.bloomAlpha})`);
+      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      // Winieta kinowa
+      const vig = ctx.createRadialGradient(w * 0.5, h * 0.5, w * 0.28, w * 0.5, h * 0.5, w * 0.72);
+      vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vig.addColorStop(1, `rgba(2, 6, 23, ${cfg.vignetteAlpha})`);
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    handleResize() {
+      if (!this.renderer || !this.camera) return;
+      const w = global.innerWidth || 1280;
+      const h = Math.max(1, global.innerHeight || 720);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(w, h, false);
+    }
+
+    update(dtSec = 0.016, playerPos = null) {
+      const dt = clamp(dtSec, 0.001, 0.25, 0.016);
+      this._time += dt;
+
+      if (playerPos) {
+        this.precision.setOrigin(playerPos.x, playerPos.y, playerPos.z);
+        if (this.skyMesh) {
+          this.skyMesh.position.set(playerPos.x, playerPos.y * 0.15, playerPos.z);
+        }
+      }
+
+      if (this.waterMesh) {
+        this.waterMesh.position.y = 0.12 + Math.sin(this._time * 2.1) * 0.06;
+      }
+
+      for (let i = 0; i < this.clouds.length; i++) {
+        const c = this.clouds[i];
+        if (!c || !c.visible) continue;
+        c.position.x += dt * (2.5 + (i % 4) * 0.8);
+        if (c.position.x > 650) c.position.x = -650;
+      }
+
+      this.renderPostFx();
+    }
+
+    render() {
+      if (this.renderer && this.scene && this.camera) {
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    dispose() {
+      this.clearGraphicsGroup();
+      if (this._postCanvas && this._postCanvas.parentNode) {
+        this._postCanvas.parentNode.removeChild(this._postCanvas);
+      }
+      this._postCanvas = null;
+      this._postCtx = null;
+    }
+  }
+
+  const grafika = new GrafikaEngine64();
+  global.GrafikaEngine64 = GrafikaEngine64;
+  global.GRAFIKA_64 = grafika;
+  global.grafika = grafika;
+})(typeof window !== 'undefined' ? window : globalThis);
