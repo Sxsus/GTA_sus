@@ -1,0 +1,823 @@
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Gta.java — Silnik wzmacniający funkcje, balansujący rozgrywkę, naprawiający
+ * błędy stanu oraz integrujący Groq AI do dynamicznego ulepszania funkcji gry
+ * GTA SUS 3D: Infinity Edition.
+ *
+ * Kompilacja i uruchomienie:
+ *   javac Gta.java && java Gta
+ *   javac Gta.java && java Gta --self-test
+ *   javac Gta.java && java Gta --no-server
+ */
+public class Gta {
+
+    public static final String VERSION = "10.64-java-ai-upgrader";
+    public static final int DEFAULT_PORT = 8766;
+    private static final String GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String GROQ_MODEL = "llama-3.3-70b-versatile";
+
+    public static final List<String> DEFAULT_GROQ_KEYS = List.of(
+            "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",
+            "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",
+            "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",
+            "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",
+            "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",
+            "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",
+            "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"
+    );
+
+    private static double clamp(double val, double min, double max, double fallback) {
+        if (Double.isNaN(val) || Double.isInfinite(val)) {
+            return fallback;
+        }
+        return Math.max(min, Math.min(max, val));
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Naprawia niepoprawne lub skrajne wartości stanu gry i wykrywa potencjalne błędy.
+     */
+    public static final class StateRepairResult {
+        public final int hp;
+        public final long cash;
+        public final int stars;
+        public final double altitude;
+        public final double vy;
+        public final boolean inVehicle;
+        public final boolean parachuteOpen;
+        public final boolean blockCarInWater;
+        public final boolean onMoon;
+        public final List<String> fixes;
+
+        public StateRepairResult(
+                int hp,
+                long cash,
+                int stars,
+                double altitude,
+                double vy,
+                boolean inVehicle,
+                boolean parachuteOpen,
+                boolean blockCarInWater,
+                boolean onMoon,
+                List<String> fixes) {
+            this.hp = hp;
+            this.cash = cash;
+            this.stars = stars;
+            this.altitude = altitude;
+            this.vy = vy;
+            this.inVehicle = inVehicle;
+            this.parachuteOpen = parachuteOpen;
+            this.blockCarInWater = blockCarInWater;
+            this.onMoon = onMoon;
+            this.fixes = fixes;
+        }
+
+        public String toJson() {
+            StringBuilder fixesJson = new StringBuilder("[");
+            for (int i = 0; i < fixes.size(); i++) {
+                if (i > 0) fixesJson.append(",");
+                fixesJson.append("\"").append(escapeJson(fixes.get(i))).append("\"");
+            }
+            fixesJson.append("]");
+
+            return "{"
+                    + "\"hp\":" + hp + ","
+                    + "\"cash\":" + cash + ","
+                    + "\"stars\":" + stars + ","
+                    + "\"altitude\":" + altitude + ","
+                    + "\"vy\":" + vy + ","
+                    + "\"inVehicle\":" + inVehicle + ","
+                    + "\"parachuteOpen\":" + parachuteOpen + ","
+                    + "\"blockCarInWater\":" + blockCarInWater + ","
+                    + "\"onMoon\":" + onMoon + ","
+                    + "\"fixes\":" + fixesJson
+                    + "}";
+        }
+    }
+
+    public static final class StateSanitizer {
+        public static StateRepairResult repair(Map<String, Object> raw) {
+            Map<String, Object> src = raw != null ? raw : Map.of();
+            List<String> fixes = new ArrayList<>();
+
+            double rawHp = toDouble(src.get("hp"), 100.0);
+            int hp = (int) Math.round(clamp(rawHp, 0.0, 100.0, 100.0));
+            if (Math.abs(rawHp - hp) > 0.001) {
+                fixes.add("Skorygowano HP gracza do bezpiecznego zakresu (0..100).");
+            }
+
+            double rawCash = toDouble(src.get("cash"), 1000.0);
+            long cash = Math.round(clamp(rawCash, 0.0, 10_000_000_000.0, 1000.0));
+            if (Math.abs(rawCash - cash) > 0.001) {
+                fixes.add("Naprawiono saldo gotówki (zapobieganie ujemnej kasie lub NaN).");
+            }
+
+            double rawStars = toDouble(src.get("stars"), 0.0);
+            int stars = (int) Math.round(clamp(rawStars, 0.0, 6.0, 0.0));
+            if (Math.abs(rawStars - stars) > 0.001) {
+                fixes.add("Ujednolicono poziom pościgu (0..6★).");
+            }
+
+            double altitude = Math.round(clamp(toDouble(src.get("altitude"), 0.0), -50.0, 5000.0, 0.0) * 100.0) / 100.0;
+            double vy = Math.round(clamp(toDouble(src.get("vy"), 0.0), -250.0, 250.0, 0.0) * 100.0) / 100.0;
+            boolean inVehicle = toBoolean(src.get("inVehicle"), false);
+            boolean parachuteOpen = toBoolean(src.get("parachuteOpen"), false);
+            boolean hasParachute = toBoolean(src.get("hasParachute"), true);
+            boolean inWater = toBoolean(src.get("inWater"), false);
+            boolean onMoon = toBoolean(src.get("onMoon"), false);
+            String vType = String.valueOf(src.getOrDefault("vehicleType", "car")).toLowerCase(Locale.ROOT);
+
+            if (!inVehicle && altitude > 14.0 && vy < -14.0 && !parachuteOpen) {
+                if (hasParachute) {
+                    parachuteOpen = true;
+                    fixes.add("Automatycznie otwarto spadochron przy szybkim opadaniu.");
+                } else {
+                    fixes.add("Wykryto swobodny spadek bez spadochronu — aktywowano ostrzeżenie o obrażeniach.");
+                }
+            }
+
+            boolean blockCarInWater = false;
+            boolean isWaterVessel = vType.equals("boat") || vType.equals("ship") || vType.equals("jet_ski");
+            if (inVehicle && inWater && !isWaterVessel) {
+                blockCarInWater = true;
+                fixes.add("Zablokowano wjazd pojazdu lądowego do głębokiej wody.");
+            }
+
+            return new StateRepairResult(
+                    hp, cash, stars, altitude, vy,
+                    inVehicle, parachuteOpen, blockCarInWater, onMoon, fixes
+            );
+        }
+
+        private static double toDouble(Object v, double fallback) {
+            if (v instanceof Number n) return n.doubleValue();
+            if (v == null) return fallback;
+            try {
+                return Double.parseDouble(String.valueOf(v).trim().replace(',', '.'));
+            } catch (NumberFormatException e) {
+                return fallback;
+            }
+        }
+
+        private static boolean toBoolean(Object v, boolean fallback) {
+            if (v instanceof Boolean b) return b;
+            if (v == null) return fallback;
+            String s = String.valueOf(v).trim().toLowerCase(Locale.ROOT);
+            if ("true".equals(s) || "1".equals(s) || "yes".equals(s)) return true;
+            if ("false".equals(s) || "0".equals(s) || "no".equals(s)) return false;
+            return fallback;
+        }
+    }
+
+    /**
+     * Wzmacnia i balansuje parametry rozgrywki oraz pozwala AI podnosić poziom ulepszeń.
+     */
+    public static final class GameplayBooster {
+        private final String seed;
+        private double chaosMultiplier;
+        private double lootMultiplier;
+        private double lamborghiniBoost;
+        private double nitroMultiplier;
+        private double spacebarClimbRate;
+        private double helicopterLiftAccel;
+        private double parachuteDescentSpeed;
+        private double moonGravityScale;
+        private int upgradeTier = 1;
+        private final List<String> appliedUpgrades = new ArrayList<>();
+
+        public GameplayBooster(String seed) {
+            this.seed = (seed == null || seed.isBlank()) ? "DUBAI-SUS-64" : seed.trim();
+            this.chaosMultiplier = deriveMultiplier(this.seed + ":chaos");
+            this.lootMultiplier = deriveMultiplier(this.seed + ":loot");
+            this.lamborghiniBoost = 1.20;
+            this.nitroMultiplier = 1.72;
+            this.spacebarClimbRate = 28.0;
+            this.helicopterLiftAccel = 34.0;
+            this.parachuteDescentSpeed = 5.0;
+            this.moonGravityScale = 0.24;
+        }
+
+        private static double deriveMultiplier(String key) {
+            try {
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(key.getBytes(StandardCharsets.UTF_8));
+                int raw = ((hash[0] & 0xFF) << 24)
+                        | ((hash[1] & 0xFF) << 16)
+                        | ((hash[2] & 0xFF) << 8)
+                        | (hash[3] & 0xFF);
+                double norm = (raw & 0xFFFFFFFFL) / 4294967295.0;
+                return Math.round((0.90 + norm * 0.30) * 1000.0) / 1000.0;
+            } catch (Exception e) {
+                return 1.0;
+            }
+        }
+
+        public synchronized void applyFunctionBoost(String focusArea, String note) {
+            upgradeTier++;
+            String area = (focusArea == null || focusArea.isBlank()) ? "all" : focusArea.toLowerCase(Locale.ROOT);
+
+            if (area.contains("flight") || area.contains("space") || area.contains("heli") || area.contains("plane") || area.equals("all")) {
+                this.spacebarClimbRate = Math.round(clamp(this.spacebarClimbRate + 2.5, 28.0, 55.0, 30.0) * 10.0) / 10.0;
+                this.helicopterLiftAccel = Math.round(clamp(this.helicopterLiftAccel + 3.0, 34.0, 65.0, 37.0) * 10.0) / 10.0;
+            }
+            if (area.contains("car") || area.contains("lambo") || area.contains("nitro") || area.contains("speed") || area.equals("all")) {
+                this.lamborghiniBoost = Math.round(clamp(this.lamborghiniBoost + 0.06, 1.20, 1.85, 1.26) * 100.0) / 100.0;
+                this.nitroMultiplier = Math.round(clamp(this.nitroMultiplier + 0.08, 1.72, 2.50, 1.80) * 100.0) / 100.0;
+            }
+            if (area.contains("loot") || area.contains("heist") || area.contains("money") || area.equals("all")) {
+                this.lootMultiplier = Math.round(clamp(this.lootMultiplier + 0.08, 0.90, 2.20, 1.15) * 1000.0) / 1000.0;
+            }
+            if (area.contains("chaos") || area.contains("ragdoll") || area.equals("all")) {
+                this.chaosMultiplier = Math.round(clamp(this.chaosMultiplier + 0.07, 0.90, 2.20, 1.15) * 1000.0) / 1000.0;
+            }
+            if (area.contains("parachute") || area.contains("fall") || area.equals("all")) {
+                this.parachuteDescentSpeed = Math.round(clamp(this.parachuteDescentSpeed - 0.35, 2.5, 6.0, 4.5) * 100.0) / 100.0;
+            }
+            if (area.contains("moon") || area.contains("nasa") || area.equals("all")) {
+                this.moonGravityScale = Math.round(clamp(this.moonGravityScale - 0.02, 0.14, 0.32, 0.22) * 100.0) / 100.0;
+            }
+
+            String summary = "Tier #" + upgradeTier + " [" + area + "]" + (note != null && !note.isBlank() ? ": " + note.trim() : "");
+            appliedUpgrades.add(summary);
+            if (appliedUpgrades.size() > 15) {
+                appliedUpgrades.remove(0);
+            }
+        }
+
+        public synchronized String buildTuningJson() {
+            long shopHeist = Math.round(920 * lootMultiplier);
+            long bankHeist = Math.round(7200 * lootMultiplier);
+            long moonReward = Math.round(2800 * lootMultiplier);
+            double ragdollBoost = Math.round((1.25 * chaosMultiplier) * 100.0) / 100.0;
+
+            StringBuilder upgJson = new StringBuilder("[");
+            for (int i = 0; i < appliedUpgrades.size(); i++) {
+                if (i > 0) upgJson.append(",");
+                upgJson.append("\"").append(escapeJson(appliedUpgrades.get(i))).append("\"");
+            }
+            upgJson.append("]");
+
+            return "{"
+                    + "\"version\":\"" + escapeJson(VERSION) + "\","
+                    + "\"seed\":\"" + escapeJson(seed) + "\","
+                    + "\"upgradeTier\":" + upgradeTier + ","
+                    + "\"appliedUpgrades\":" + upgJson + ","
+                    + "\"multipliers\":{"
+                    + "\"chaos\":" + chaosMultiplier + ","
+                    + "\"loot\":" + lootMultiplier + ","
+                    + "\"ragdollImpulse\":" + ragdollBoost
+                    + "},"
+                    + "\"economy\":{"
+                    + "\"startingCash\":1000,"
+                    + "\"shopItemPrice\":100,"
+                    + "\"shopHeistPayout\":" + shopHeist + ","
+                    + "\"bankHeistPayout\":" + bankHeist + ","
+                    + "\"moonExplorationReward\":" + moonReward
+                    + "},"
+                    + "\"flightAndVehicles\":{"
+                    + "\"garageTotalVehicles\":400,"
+                    + "\"uniqueModelsCount\":54,"
+                    + "\"lamborghiniTopSpeedBoost\":" + lamborghiniBoost + ","
+                    + "\"nitroMultiplier\":" + nitroMultiplier + ","
+                    + "\"waterCollisionBlockForCars\":true,"
+                    + "\"spacebarClimbRate\":" + spacebarClimbRate + ","
+                    + "\"helicopterLiftAccel\":" + helicopterLiftAccel
+                    + "},"
+                    + "\"fallAndParachute\":{"
+                    + "\"fallDamageThreshold\":11.5,"
+                    + "\"fallDamageMultiplier\":3.2,"
+                    + "\"parachuteDescentSpeed\":" + parachuteDescentSpeed + ","
+                    + "\"parachuteGlideBoost\":1.3"
+                    + "},"
+                    + "\"nasaMoon\":{"
+                    + "\"launchSeconds\":5.0,"
+                    + "\"returnSeconds\":4.5,"
+                    + "\"moonGravityScale\":" + moonGravityScale + ","
+                    + "\"moonJumpImpulse\":15.0"
+                    + "}"
+                    + "}";
+        }
+
+        public String advise(StateRepairResult repaired, String vehicleType) {
+            String v = vehicleType == null ? "car" : vehicleType.toLowerCase(Locale.ROOT);
+            if (repaired.onMoon) {
+                return "Jesteś na Księżycu (niska grawitacja): skacz wysoko i użyj [E] przy rakiecie, aby wrócić na Ziemię.";
+            }
+            if (repaired.hp < 40) {
+                return "Masz mało HP (" + repaired.hp + ") — kup jedzenie lub apteczkę w sklepie ($100) albo otwórz spadochron przy opadaniu.";
+            }
+            if (repaired.stars >= 4) {
+                return "Wysoki pościg (" + repaired.stars + "★) — użyj nitro [N], przejedź mostem nad zatoką lub wejdź do wnętrza [E].";
+            }
+            if (repaired.inVehicle && (v.contains("plane") || v.contains("heli"))) {
+                return "Trzymaj [Spację] (lub [R]), aby nabierać wysokości i stabilnie prowadzić maszynę latającą.";
+            }
+            if (repaired.cash < 300) {
+                return "Dobierz darmowe Lamborghini z garażu [B] lub okradnij sklep [J], aby zwiększyć budżet.";
+            }
+            return "Funkcje wzmocnione (Tier #" + upgradeTier + ") — przetestuj flotę pojazdów, lot na Spacji, napad na bank [H] lub rakietę NASA.";
+        }
+    }
+
+    /**
+     * Klient Groq AI z rotacją kluczy (z nowym kluczem na czele) oraz ulepszaniem funkcji gry.
+     */
+    public static final class GroqFunctionUpgrader {
+        private final List<String> keys;
+        private final AtomicInteger keyCursor = new AtomicInteger(0);
+        private final HttpClient httpClient;
+        private final GameplayBooster booster;
+
+        public GroqFunctionUpgrader(List<String> rawKeys, GameplayBooster booster) {
+            Set<String> unique = new LinkedHashSet<>();
+            String envKey = System.getenv("GROQ_API_KEY");
+            if (envKey != null && !envKey.isBlank()) {
+                unique.add(envKey.trim());
+            }
+            if (rawKeys != null) {
+                for (String k : rawKeys) {
+                    if (k != null && !k.isBlank()) {
+                        unique.add(k.trim());
+                    }
+                }
+            }
+            this.keys = List.copyOf(unique);
+            this.httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+            this.booster = booster;
+        }
+
+        public int getKeyCount() {
+            return keys.size();
+        }
+
+        private String callGroqChat(String systemPrompt, String userPrompt, int maxTokens) {
+            if (keys.isEmpty()) return null;
+
+            String jsonBody = "{"
+                    + "\"model\":\"" + escapeJson(GROQ_MODEL) + "\","
+                    + "\"temperature\":0.65,"
+                    + "\"max_tokens\":" + Math.max(64, maxTokens) + ","
+                    + "\"messages\":["
+                    + "{\"role\":\"system\",\"content\":\"" + escapeJson(systemPrompt) + "\"},"
+                    + "{\"role\":\"user\",\"content\":\"" + escapeJson(userPrompt) + "\"}"
+                    + "]"
+                    + "}";
+
+            int total = keys.size();
+            int startIdx = Math.floorMod(keyCursor.get(), total);
+            for (int attempt = 0; attempt < total; attempt++) {
+                int idx = (startIdx + attempt) % total;
+                String apiKey = keys.get(idx);
+                try {
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(GROQ_CHAT_URL))
+                            .timeout(Duration.ofSeconds(8))
+                            .header("Authorization", "Bearer " + apiKey)
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                    if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                        String content = extractAssistantContent(response.body());
+                        if (content != null && !content.isBlank()) {
+                            keyCursor.set(idx);
+                            return content.trim();
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Przechodzimy do kolejnego klucza lub fallbacku lokalnego
+                }
+            }
+            return null;
+        }
+
+        private static String extractAssistantContent(String rawJson) {
+            if (rawJson == null || rawJson.isBlank()) return null;
+            Matcher m = Pattern.compile("\"content\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"").matcher(rawJson);
+            while (m.find()) {
+                String escaped = m.group(1);
+                String unescaped = unescapeJsonString(escaped);
+                if (!unescaped.isBlank() && !unescaped.startsWith("Jesteś")) {
+                    return unescaped;
+                }
+            }
+            return null;
+        }
+
+        private static String unescapeJsonString(String s) {
+            StringBuilder sb = new StringBuilder(s.length());
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
+                if (c == '\\' && i + 1 < s.length()) {
+                    char next = s.charAt(++i);
+                    switch (next) {
+                        case 'n' -> sb.append('\n');
+                        case 'r' -> sb.append('\r');
+                        case 't' -> sb.append('\t');
+                        case '"' -> sb.append('"');
+                        case '\\' -> sb.append('\\');
+                        case 'u' -> {
+                            if (i + 4 < s.length()) {
+                                try {
+                                    int code = Integer.parseInt(s.substring(i + 1, i + 5), 16);
+                                    sb.append((char) code);
+                                    i += 4;
+                                } catch (NumberFormatException e) {
+                                    sb.append("\\u");
+                                }
+                            }
+                        }
+                        default -> sb.append(next);
+                    }
+                } else {
+                    sb.append(c);
+                }
+            }
+            return sb.toString();
+        }
+
+        public String upgradeFunctionsWithAi(String goal, Map<String, Object> context) {
+            String focus = (goal == null || goal.isBlank()) ? "all" : goal.trim();
+            String lower = focus.toLowerCase(Locale.ROOT);
+
+            String sysPrompt = "Jesteś inżynierem rozgrywki i optymalizacji AI dla gry GTA SUS 3D: Infinity Edition. "
+                    + "Krótko i konkretnie (po polsku) opisz, jak ulepszasz funkcje gry (lot na Spacji, flota Lamborghini, "
+                    + "spadochron, napady [J]/[H], rakieta NASA na Księżyc, blokada wjazdu aut do wody).";
+            String userPrompt = "Ulepsz funkcje w obszarze: " + focus + ". Kontekst gracza: " + context;
+
+            String aiNote = callGroqChat(sysPrompt, userPrompt, 260);
+            if (aiNote == null || aiNote.isBlank()) {
+                aiNote = "Wzmocniono mnożniki fizyki, lotu na Spacji, spadochronu i nagród w trybie lokalnym (" + lower + ").";
+            }
+
+            booster.applyFunctionBoost(lower, aiNote);
+            return aiNote;
+        }
+
+        public String chat(String message, Map<String, Object> context) {
+            String msg = (message == null || message.isBlank()) ? "Co powinienem teraz zrobić w grze?" : message.trim();
+            StateRepairResult repaired = StateSanitizer.repair(context);
+            String vType = String.valueOf((context != null ? context.get("vehicleType") : "car"));
+
+            String sysPrompt = "Jesteś zaawansowanym asystentem AI w grze GTA SUS 3D: Infinity Edition. "
+                    + "Odpowiadasz po polsku na każde pytanie: doradzasz co zrobić w grze, liczysz matematykę (np. 2+2=4) "
+                    + "i odpowiadasz na pytania ogólne. Stan gracza: HP=" + repaired.hp + ", kasa=$" + repaired.cash
+                    + ", pościg=" + repaired.stars + "★, Księżyc=" + repaired.onMoon + ".";
+
+            String aiReply = callGroqChat(sysPrompt, msg, 450);
+            if (aiReply != null && !aiReply.isBlank()) {
+                return aiReply;
+            }
+
+            String math = trySimpleMath(msg);
+            String tip = booster.advise(repaired, vType);
+            if (math != null) {
+                return "Wynik: " + math + ". Podpowiedź do gry: " + tip;
+            }
+            return tip + " (Tryb lokalny dla pytania: \"" + msg + "\")";
+        }
+
+        private static String trySimpleMath(String text) {
+            if (text == null) return null;
+            String normalized = text.replace(',', '.');
+            Matcher m = Pattern.compile("([0-9]+(?:\\.[0-9]+)?(?:\\s*[+\\-*/]\\s*[0-9]+(?:\\.[0-9]+)?)+)").matcher(normalized);
+            if (!m.find()) return null;
+            String expr = m.group(1).replaceAll("\\s+", "");
+            try {
+                double val = evalArithmetic(expr);
+                if (Double.isNaN(val) || Double.isInfinite(val)) return null;
+                if (Math.abs(val - Math.rint(val)) < 1e-9) {
+                    return m.group(1).trim() + " = " + (long) Math.rint(val);
+                }
+                return m.group(1).trim() + " = " + (Math.round(val * 10000.0) / 10000.0);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private static double evalArithmetic(String expr) {
+            return new Object() {
+                int pos = -1, ch;
+                void nextChar() { ch = (++pos < expr.length()) ? expr.charAt(pos) : -1; }
+                boolean eat(int charToEat) {
+                    while (ch == ' ') nextChar();
+                    if (ch == charToEat) { nextChar(); return true; }
+                    return false;
+                }
+                double parse() {
+                    nextChar();
+                    double x = parseExpression();
+                    if (pos < expr.length()) throw new RuntimeException("Unexpected: " + (char) ch);
+                    return x;
+                }
+                double parseExpression() {
+                    double x = parseTerm();
+                    for (;;) {
+                        if (eat('+')) x += parseTerm();
+                        else if (eat('-')) x -= parseTerm();
+                        else return x;
+                    }
+                }
+                double parseTerm() {
+                    double x = parseFactor();
+                    for (;;) {
+                        if (eat('*')) x *= parseFactor();
+                        else if (eat('/')) x /= parseFactor();
+                        else return x;
+                    }
+                }
+                double parseFactor() {
+                    if (eat('+')) return parseFactor();
+                    if (eat('-')) return -parseFactor();
+                    double x;
+                    int startPos = this.pos;
+                    if (eat('(')) {
+                        x = parseExpression();
+                        eat(')');
+                    } else if ((ch >= '0' && ch <= '9') || ch == '.') {
+                        while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
+                        x = Double.parseDouble(expr.substring(startPos, this.pos));
+                    } else {
+                        throw new RuntimeException("Unexpected: " + (char) ch);
+                    }
+                    return x;
+                }
+            }.parse();
+        }
+    }
+
+    /**
+     * Prosty parser JSON bez zewnętrznych zależności.
+     */
+    private static Map<String, Object> parseLooseJson(String body) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (body == null || body.isBlank()) return out;
+
+        Matcher pairMatcher = Pattern.compile("\"([a-zA-Z0-9_]+)\"\\s*:\\s*(\"[^\"]*\"|true|false|null|-?[0-9]+(?:\\.[0-9]+)?)")
+                .matcher(body);
+        while (pairMatcher.find()) {
+            String key = pairMatcher.group(1);
+            String rawVal = pairMatcher.group(2);
+            if (rawVal.startsWith("\"") && rawVal.endsWith("\"")) {
+                out.put(key, unescapeJson(rawVal.substring(1, rawVal.length() - 1)));
+            } else if ("true".equals(rawVal) || "false".equals(rawVal)) {
+                out.put(key, Boolean.parseBoolean(rawVal));
+            } else if ("null".equals(rawVal)) {
+                out.put(key, null);
+            } else {
+                try {
+                    if (rawVal.contains(".")) {
+                        out.put(key, Double.parseDouble(rawVal));
+                    } else {
+                        out.put(key, Long.parseLong(rawVal));
+                    }
+                } catch (NumberFormatException ignored) {
+                    out.put(key, rawVal);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String unescapeJson(String s) {
+        return s.replace("\\\"", "\"").replace("\\\\", "\\").replace("\\n", "\n");
+    }
+
+    public static void writeTuningJs(Path outFile, String tuningJson) throws IOException {
+        String js = "/**\n"
+                + " * gta_java_tuning.js — Wygenerowane przez Gta.java\n"
+                + " * Wzmocnione i zaktualizowane przez AI parametry rozgrywki dla GTA SUS 3D: Infinity Edition.\n"
+                + " */\n"
+                + "(function (global) {\n"
+                + "  'use strict';\n"
+                + "  const GTA_JAVA_TUNING = " + tuningJson + ";\n"
+                + "  global.GTA_JAVA_TUNING = GTA_JAVA_TUNING;\n"
+                + "  global.GTA_SUS_JAVA_BOOST = {\n"
+                + "    tuning: GTA_JAVA_TUNING,\n"
+                + "    apply(state) {\n"
+                + "      if (!state || typeof state !== 'object') return GTA_JAVA_TUNING;\n"
+                + "      state.javaTuning = Object.assign({}, state.javaTuning || {}, GTA_JAVA_TUNING);\n"
+                + "      return state.javaTuning;\n"
+                + "    }\n"
+                + "  };\n"
+                + "})(typeof window !== 'undefined' ? window : globalThis);\n";
+        Files.writeString(outFile, js, StandardCharsets.UTF_8);
+    }
+
+    private static void sendJson(HttpExchange exchange, int statusCode, String jsonBody) throws IOException {
+        byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+        Headers headers = exchange.getResponseHeaders();
+        headers.set("Content-Type", "application/json; charset=utf-8");
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        headers.set("Access-Control-Allow-Headers", "Content-Type");
+        exchange.sendResponseHeaders(statusCode, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private static void startServer(int port, GameplayBooster booster, GroqFunctionUpgrader upgrader, Path outJs) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+
+        server.createContext("/api/health", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            sendJson(exchange, 200, "{\"ok\":true,\"engine\":\"Gta.java\",\"version\":\"" + escapeJson(VERSION) + "\",\"groqKeys\":" + upgrader.getKeyCount() + "}");
+        });
+
+        server.createContext("/api/tuning", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            sendJson(exchange, 200, "{\"ok\":true,\"tuning\":" + booster.buildTuningJson() + "}");
+        });
+
+        server.createContext("/api/repair", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            String body = readBody(exchange);
+            Map<String, Object> parsed = parseLooseJson(body);
+            StateRepairResult repaired = StateSanitizer.repair(parsed);
+            sendJson(exchange, 200, "{\"ok\":true,\"repaired\":" + repaired.toJson() + "}");
+        });
+
+        server.createContext("/api/advisor", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            String body = readBody(exchange);
+            Map<String, Object> parsed = parseLooseJson(body);
+            StateRepairResult repaired = StateSanitizer.repair(parsed);
+            String vType = String.valueOf(parsed.getOrDefault("vehicleType", "car"));
+            String tip = booster.advise(repaired, vType);
+            String resp = "{\"ok\":true,\"tip\":\"" + escapeJson(tip) + "\",\"repaired\":" + repaired.toJson() + "}";
+            sendJson(exchange, 200, resp);
+        });
+
+        server.createContext("/api/upgrade", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            String body = readBody(exchange);
+            Map<String, Object> parsed = parseLooseJson(body);
+            String goal = String.valueOf(parsed.getOrDefault("goal", parsed.getOrDefault("focus", "all")));
+            String note = upgrader.upgradeFunctionsWithAi(goal, parsed);
+            String updatedJson = booster.buildTuningJson();
+            try {
+                writeTuningJs(outJs, updatedJson);
+            } catch (IOException ignored) {
+            }
+            String resp = "{\"ok\":true,\"note\":\"" + escapeJson(note) + "\",\"tuning\":" + updatedJson + "}";
+            sendJson(exchange, 200, resp);
+        });
+
+        server.createContext("/api/chat", exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJson(exchange, 200, "{\"ok\":true}");
+                return;
+            }
+            String body = readBody(exchange);
+            Map<String, Object> parsed = parseLooseJson(body);
+            String msg = String.valueOf(parsed.getOrDefault("message", parsed.getOrDefault("prompt", "")));
+            String reply = upgrader.chat(msg, parsed);
+            String resp = "{\"ok\":true,\"reply\":\"" + escapeJson(reply) + "\"}";
+            sendJson(exchange, 200, resp);
+        });
+
+        server.setExecutor(Executors.newCachedThreadPool());
+        server.start();
+        System.out.println("[SERWER JAVA] Aktywny pod http://127.0.0.1:" + port + " (/api/health, /api/tuning, /api/repair, /api/advisor, /api/upgrade, /api/chat)");
+    }
+
+    private static String readBody(HttpExchange exchange) throws IOException {
+        try (InputStream is = exchange.getRequestBody()) {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void runSelfTest(GameplayBooster booster, GroqFunctionUpgrader upgrader) {
+        Map<String, Object> badState = Map.of(
+                "hp", -25,
+                "cash", -900,
+                "stars", 12,
+                "altitude", 40.0,
+                "vy", -22.0,
+                "inVehicle", false,
+                "parachuteOpen", false,
+                "hasParachute", true
+        );
+        StateRepairResult fixed = StateSanitizer.repair(badState);
+        if (fixed.hp != 0 || fixed.cash != 0 || fixed.stars != 6 || !fixed.parachuteOpen) {
+            throw new AssertionError("Test naprawy stanu nie przeszedł.");
+        }
+        upgrader.upgradeFunctionsWithAi("flight and lambo", badState);
+        String tuning = booster.buildTuningJson();
+        if (!tuning.contains("\"upgradeTier\":2") || !tuning.contains("\"garageTotalVehicles\":400")) {
+            throw new AssertionError("Test ulepszania funkcji nie przeszedł.");
+        }
+        System.out.println("[SELF-TEST OK] Gta.java zweryfikowany (kluczy Groq: " + upgrader.getKeyCount() + ", poprawek stanu: " + fixed.fixes.size() + ").");
+    }
+
+    public static void main(String[] args) throws Exception {
+        int port = DEFAULT_PORT;
+        String seed = "DUBAI-SUS-64";
+        boolean noServer = false;
+        boolean selfTest = false;
+
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--port" -> {
+                    if (i + 1 < args.length) {
+                        port = (int) clamp(Double.parseDouble(args[++i]), 1024, 65535, DEFAULT_PORT);
+                    }
+                }
+                case "--seed" -> {
+                    if (i + 1 < args.length) {
+                        seed = args[++i];
+                    }
+                }
+                case "--no-server" -> noServer = true;
+                case "--self-test" -> selfTest = true;
+                default -> { }
+            }
+        }
+
+        GameplayBooster booster = new GameplayBooster(seed);
+        GroqFunctionUpgrader upgrader = new GroqFunctionUpgrader(DEFAULT_GROQ_KEYS, booster);
+
+        if (selfTest) {
+            runSelfTest(booster, upgrader);
+            return;
+        }
+
+        String tuningJson = booster.buildTuningJson();
+        Path outJs = Paths.get("gta_java_tuning.js");
+        writeTuningJs(outJs, tuningJson);
+        System.out.println("[OK] Wygenerowano " + outJs.toAbsolutePath() + " (seed: " + seed + ", kluczy Groq: " + upgrader.getKeyCount() + ")");
+
+        if (!noServer) {
+            startServer(port, booster, upgrader, outJs);
+        }
+    }
+}
