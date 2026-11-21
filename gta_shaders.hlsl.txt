@@ -1,0 +1,237 @@
+/**
+ * gta_shaders.hlsl — 64-Bit Shader Suite (HLSL) dla GTA SUS 3D: Infinity Edition
+ * Oświetlenie, cienie, odbicia na wodzie, efekty pogodowe, okna wieżowców i materiały PBR.
+ * Groq AI Reference Key: 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
+ */
+
+#ifndef GTA_SHADERS_HLSL
+#define GTA_SHADERS_HLSL
+
+cbuffer SceneConstants64 : register(b0)
+{
+    float4x4 gWorld;
+    float4x4 gView;
+    float4x4 gProj;
+    float4x4 gLightViewProj;
+
+    float3   gCameraPos;
+    float    gTime;
+
+    float3   gSunDir;          // Kierunek światła słonecznego (znormalizowany)
+    float    gSunIntensity;
+
+    float3   gSunColor;
+    float    gFogDensity;
+
+    float3   gSkyTopColor;
+    float    gWeatherFactor;   // 0.0 = pogoda czysta, 0.5 = mgła/zachmurzenie, 1.0 = deszcz/burza
+
+    float3   gSkyHorizonColor;
+    float    gNightWindowGlow; // Siła świecenia okien wieżowców (dzień -> noc)
+
+    float3   gWaterColor;
+    float    gMoonMode;        // 0.0 = Ziemia, 1.0 = powierzchnia Księżyca
+};
+
+cbuffer MaterialConstants64 : register(b1)
+{
+    float3   gAlbedoColor;
+    float    gRoughness;       // 0.05 (lustro/woda) .. 0.95 (mat/asfalt/Księżyc)
+
+    float    gMetallic;        // 0.0 (dielektryk) .. 1.0 (metal/szkło)
+    float    gEmissiveStrength;
+    float    gIsWater;         // > 0.5 dla powierzchni wody
+    float    gIsBuilding;      // > 0.5 dla wieżowców z oknami
+};
+
+Texture2D    gAlbedoTex     : register(t0);
+Texture2D    gNormalTex     : register(t1);
+Texture2D    gShadowMap     : register(t2);
+SamplerState gLinearClamp   : register(s0);
+SamplerState gLinearWrap    : register(s1);
+SamplerComparisonState gShadowCmp : register(s2);
+
+struct VSInput
+{
+    float3 position : POSITION;
+    float3 normal   : NORMAL;
+    float2 uv       : TEXCOORD0;
+};
+
+struct PSInput
+{
+    float4 posH       : SV_POSITION;
+    float3 worldPos   : TEXCOORD0;
+    float3 normalW    : TEXCOORD1;
+    float2 uv         : TEXCOORD2;
+    float4 shadowPosH : TEXCOORD3;
+};
+
+// Szybka funkcja hashująca 2D do proceduralnych okien, chmur i detali
+float Hash21(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+// Wielowarstwowe fale wodne dla zatoki w metropolii
+float3 EvaluateWaterNormal(float2 worldXZ, float time, float weather)
+{
+    float speed = lerp(1.2, 2.4, saturate(weather));
+    float2 p1 = worldXZ * 0.045 + float2(time * 0.35 * speed, -time * 0.22 * speed);
+    float2 p2 = worldXZ * 0.110 + float2(-time * 0.48 * speed, time * 0.41 * speed);
+
+    float w1 = sin(p1.x * 6.2831 + cos(p1.y * 4.5));
+    float w2 = cos(p2.y * 6.2831 - sin(p2.x * 5.2));
+    float dx = (w1 * 0.08 + w2 * 0.05);
+    float dz = (w2 * 0.08 - w1 * 0.05);
+
+    return normalize(float3(-dx, 1.0, -dz));
+}
+
+// Odbicia i rozproszenie Fresnela na wodzie oraz metalicznych powierzchniach
+float3 ComputeWaterReflections(float3 N, float3 V, float3 L, float3 skyHorizon, float3 skyTop, float3 sunCol, float sunInt)
+{
+    float3 R = reflect(-V, N);
+    float fresnel = pow(1.0 - saturate(dot(N, V)), 4.0);
+    fresnel = lerp(0.06, 0.92, fresnel);
+
+    float skyGrad = saturate(R.y * 0.5 + 0.5);
+    float3 envRefl = lerp(skyHorizon, skyTop, skyGrad);
+
+    float3 H = normalize(L + V);
+    float spec = pow(saturate(dot(N, H)), 180.0) * sunInt * 1.6;
+
+    float3 deepWater = gWaterColor * 0.55;
+    float3 surfaceCol = lerp(deepWater, envRefl, fresnel) + sunCol * spec;
+    return surfaceCol;
+}
+
+// Miękkie cienie PCF z mapy cieni
+float ComputeShadowPCF(float4 shadowPosH)
+{
+    float3 proj = shadowPosH.xyz / max(shadowPosH.w, 1e-5);
+    float2 uv = proj.xy * float2(0.5, -0.5) + 0.5;
+
+    if (uv.x <= 0.001 || uv.x >= 0.999 || uv.y <= 0.001 || uv.y >= 0.999 || proj.z >= 1.0)
+    {
+        return 1.0;
+    }
+
+    float bias = 0.0025;
+    float depth = saturate(proj.z - bias);
+    float sum = 0.0;
+    float2 texel = 1.0 / 2048.0;
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            sum += gShadowMap.SampleCmpLevelZero(gShadowCmp, uv + float2(x, y) * texel, depth);
+        }
+    }
+    return sum / 9.0;
+}
+
+// Emisja okien wieżowców w stylu Dubaj/USA
+float3 EvaluateSkyscraperWindows(float2 uv, float3 worldPos, float nightGlow)
+{
+    float2 grid = floor(float2(uv.x * 24.0, worldPos.y * 0.35));
+    float cellRand = Hash21(grid);
+    float isLit = step(0.45, cellRand);
+    float3 warmLight = float3(1.00, 0.84, 0.45);
+    float3 coolLight = float3(0.55, 0.85, 1.00);
+    float3 winCol = lerp(coolLight, warmLight, Hash21(grid + 17.3));
+    return winCol * isLit * saturate(nightGlow) * 1.45;
+}
+
+// Efekty pogodowe (mgła, przyciemnienie chmur i deszcz)
+float3 ApplyWeatherAndFog(float3 color, float3 worldPos, float3 camPos, float weather, float fogDensity, float3 fogColor)
+{
+    float dist = length(worldPos - camPos);
+
+    // Efekt deszczu / wilgotnego powietrza przy wysokim gWeatherFactor
+    if (weather > 0.35)
+    {
+        float rainMask = saturate((weather - 0.35) / 0.65);
+        float streak = Hash21(float2(floor(worldPos.x * 3.5 + worldPos.z * 2.0), floor(worldPos.y * 0.4 - gTime * 28.0)));
+        float rainHighlight = step(0.96, streak) * rainMask * 0.35;
+        color = lerp(color, color * 0.78 + float3(0.12, 0.16, 0.22), rainMask * 0.45) + rainHighlight;
+    }
+
+    // Wykładnicza mgła 64-bitowa
+    float effectiveFog = fogDensity * lerp(0.85, 2.1, saturate(weather));
+    float fogFactor = 1.0 - exp(-pow(dist * effectiveFog, 2.0));
+    return lerp(color, fogColor, saturate(fogFactor));
+}
+
+PSInput VSMain(VSInput input)
+{
+    PSInput output;
+    float4 worldPos4 = mul(float4(input.position, 1.0), gWorld);
+    output.worldPos = worldPos4.xyz;
+    output.posH = mul(mul(worldPos4, gView), gProj);
+    output.normalW = normalize(mul(input.normal, (float3x3)gWorld));
+    output.uv = input.uv;
+    output.shadowPosH = mul(worldPos4, gLightViewProj);
+    return output;
+}
+
+float4 PSMain(PSInput input) : SV_TARGET
+{
+    float3 N = normalize(input.normalW);
+    float3 V = normalize(gCameraPos - input.worldPos);
+    float3 L = normalize(-gSunDir);
+
+    float4 texSample = gAlbedoTex.Sample(gLinearWrap, input.uv);
+    float3 baseAlbedo = texSample.rgb * gAlbedoColor;
+
+    // Na Księżycu brak atmosferycznego rozproszenia i wody
+    if (gMoonMode > 0.5)
+    {
+        float ndotlMoon = saturate(dot(N, L));
+        float3 moonCol = baseAlbedo * (0.12 + ndotlMoon * gSunIntensity * 1.15);
+        return float4(moonCol, 1.0);
+    }
+
+    if (gIsWater > 0.5)
+    {
+        float3 wN = EvaluateWaterNormal(input.worldPos.xz, gTime, gWeatherFactor);
+        float3 waterLit = ComputeWaterReflections(wN, V, L, gSkyHorizonColor, gSkyTopColor, gSunColor, gSunIntensity);
+        float3 finalWater = ApplyWeatherAndFog(waterLit, input.worldPos, gCameraPos, gWeatherFactor, gFogDensity, gSkyHorizonColor);
+        return float4(finalWater, 0.90);
+    }
+
+    // Oświetlenie bezpośrednie + miękkie cienie PCF
+    float shadow = ComputeShadowPCF(input.shadowPosH);
+    float ndotl = saturate(dot(N, L));
+
+    // Światło półkuliste (niebo / ziemia)
+    float hemiMix = saturate(N.y * 0.5 + 0.5);
+    float3 ambient = lerp(float3(0.14, 0.16, 0.22), gSkyHorizonColor * 0.65, hemiMix);
+
+    // Spekularny połysk Blinn-Phong / PBR
+    float3 H = normalize(L + V);
+    float shininess = lerp(16.0, 220.0, 1.0 - saturate(gRoughness));
+    float specPower = pow(saturate(dot(N, H)), shininess) * lerp(0.15, 1.2, saturate(gMetallic + (1.0 - gRoughness) * 0.5));
+
+    float3 directLight = baseAlbedo * gSunColor * ndotl * gSunIntensity * shadow;
+    float3 specularLight = lerp(float3(1.0, 1.0, 1.0), baseAlbedo, saturate(gMetallic)) * gSunColor * specPower * shadow;
+    float3 litColor = baseAlbedo * ambient + directLight + specularLight;
+
+    // Świecące okna wieżowców
+    if (gIsBuilding > 0.5)
+    {
+        litColor += EvaluateSkyscraperWindows(input.uv, input.worldPos, gNightWindowGlow);
+    }
+
+    litColor += baseAlbedo * gEmissiveStrength;
+    litColor = ApplyWeatherAndFog(litColor, input.worldPos, gCameraPos, gWeatherFactor, gFogDensity, gSkyHorizonColor);
+
+    return float4(litColor, 1.0);
+}
+
+#endif // GTA_SHADERS_HLSL
